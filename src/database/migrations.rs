@@ -337,4 +337,20 @@ mod tests {
         let statements = split_sql_statements(sql);
         assert_eq!(statements.len(), 2);
     }
+
+    #[test]
+    fn test_sql_splitting_multiline_table() {
+        let sql = r#"
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    email VARCHAR(255) NOT NULL
+);
+CREATE INDEX idx_users_email ON users(email);
+"#;
+        let statements = split_sql_statements(sql);
+        assert_eq!(statements.len(), 2);
+        assert!(statements[0].contains("CREATE TABLE"));
+        assert!(statements[0].contains("email VARCHAR"));
+        assert!(statements[1].contains("CREATE INDEX"));
+    }
 }
