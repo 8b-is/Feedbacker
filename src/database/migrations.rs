@@ -71,8 +71,15 @@ async fn apply_migration(pool: &PgPool, migration: &Migration) -> Result<()> {
 
     // Execute each SQL statement separately
     for statement in split_sql_statements(&migration.up_sql) {
-        let trimmed = statement.trim();
-        if !trimmed.is_empty() && !trimmed.starts_with("--") {
+        // Strip leading comment lines from statement
+        let cleaned: String = statement
+            .lines()
+            .skip_while(|line| line.trim().is_empty() || line.trim().starts_with("--"))
+            .collect::<Vec<_>>()
+            .join("\n");
+
+        let trimmed = cleaned.trim();
+        if !trimmed.is_empty() {
             sqlx::query(trimmed)
                 .execute(&mut *transaction)
                 .await
