@@ -353,4 +353,23 @@ CREATE INDEX idx_users_email ON users(email);
         assert!(statements[0].contains("email VARCHAR"));
         assert!(statements[1].contains("CREATE INDEX"));
     }
+
+    #[test]
+    fn test_actual_migration_sql() {
+        let migrations = get_all_migrations();
+        let migration = &migrations[0];
+        let statements = split_sql_statements(&migration.up_sql);
+
+        println!("\n=== SPLIT STATEMENTS ({} total) ===", statements.len());
+        for (i, stmt) in statements.iter().enumerate() {
+            let preview: String = stmt.chars().take(80).collect();
+            println!("{}. {}", i + 1, preview.replace('\n', " "));
+        }
+
+        // First statement should be CREATE TYPE, not CREATE INDEX
+        assert!(!statements[0].trim().starts_with("CREATE INDEX"),
+            "First statement should not be CREATE INDEX!");
+        assert!(statements.iter().any(|s| s.contains("CREATE TABLE users")),
+            "Should have CREATE TABLE users statement");
+    }
 }
