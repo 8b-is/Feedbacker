@@ -1,0 +1,105 @@
+# 🚢 Feedbacker Docker Compose - Complete stack deployment! 🚢
+# Built with love by Aye & Hue - Making orchestration magical! ✨
+# Usage: docker compose up -d
+
+services:
+  # 🚢 Main Feedbacker service
+  feedbacker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: feedbacker
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgresql://feedbacker:feedbacker_secret@postgres:5432/feedbacker_db
+      - REDIS_URL=redis://redis:6379
+      - SERVER_ADDRESS=0.0.0.0:3000
+      - ENVIRONMENT=production
+      - RUST_LOG=info,feedbacker=debug
+      # GitHub config - set in .env file
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GITHUB_USERNAME=${GITHUB_USERNAME:-aye-is}
+      - GITHUB_SSH_PRIVATE_KEY_PATH=/home/feedbacker/.ssh/id_rsa
+      # Auth config
+      - JWT_SECRET=${JWT_SECRET}
+      # LLM config (optional)
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Rate limiting
+      - RATE_LIMIT_REQUESTS_PER_MINUTE=${RATE_LIMIT_REQUESTS_PER_MINUTE:-60}
+      - RATE_LIMIT_FEEDBACK_PER_HOUR=${RATE_LIMIT_FEEDBACK_PER_HOUR:-10}
+      # Features
+      - ENABLE_BACKGROUND_JOBS=true
+      - ENABLE_GITHUB_WEBHOOKS=true
+    volumes:
+      # Mount SSH keys for GitHub operations
+      - ${SSH_KEY_PATH:-./ssh}:/home/feedbacker/.ssh:ro
+      # Logs persistence
+      - feedbacker_logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - feedbacker_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # 🗄️ PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: feedbacker_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=feedbacker
+      - POSTGRES_PASSWORD=feedbacker_secret
+      - POSTGRES_DB=feedbacker_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - feedbacker_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U feedbacker -d feedbacker_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 🔴 Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: feedbacker_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - feedbacker_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    name: feedbacker_postgres_data
+  redis_data:
+    name: feedbacker_redis_data
+  feedbacker_logs:
+    name: feedbacker_logs
+
+networks:
+  feedbacker_network:
+    name: feedbacker_network
+    driver: bridge
