@@ -425,7 +425,7 @@ async fn fetch_feedback_list(
     if let Some(user_id) = &query.user_id {
         sql_where.push(format!("user_id = ${}", param_index));
         params.push(serde_json::to_value(user_id)?);
-        param_index += 1;
+        // param_index would be incremented here if more filters were added
     }
 
     let where_clause = if sql_where.is_empty() {

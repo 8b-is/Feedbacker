@@ -205,8 +205,8 @@ fn extract_token_from_headers(headers: &HeaderMap) -> Option<String> {
     // 🔍 Check Authorization header with Bearer scheme
     if let Some(auth_header) = headers.get("Authorization") {
         if let Ok(auth_str) = auth_header.to_str() {
-            if auth_str.starts_with("Bearer ") {
-                return Some(auth_str[7..].to_string());
+            if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                return Some(token.to_string());
             }
         }
     }

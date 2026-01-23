@@ -5,8 +5,7 @@
 use anyhow::{Context, Result};
 use octocrab::models::{issues::Issue, Repository};
 use octocrab::Octocrab;
-use serde_json::json;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 /// 🐙 GitHub API client wrapper
 pub struct GitHubClient {
@@ -118,7 +117,7 @@ impl GitHubClient {
         self.octocrab
             .issues(owner, repo)
             .update(issue_number.into())
-            .state(octocrab::params::State::Closed)
+            .state(octocrab::models::IssueState::Closed)
             .send()
             .await
             .with_context(|| {
@@ -161,26 +160,21 @@ impl GitHubClient {
         owner: &str,
         repo: &str,
         state: Option<&str>,
-        labels: Option<&str>,
+        _labels: Option<&str>,
     ) -> Result<Vec<Issue>> {
         info!("📋 Listing issues from {}/{}", owner, repo);
 
-        let mut issues_handler = self.octocrab.issues(owner, repo);
+        let state_param = match state {
+            Some("open") => octocrab::params::State::Open,
+            Some("closed") => octocrab::params::State::Closed,
+            _ => octocrab::params::State::All,
+        };
 
-        if let Some(state) = state {
-            issues_handler = issues_handler.state(match state {
-                "open" => octocrab::params::State::Open,
-                "closed" => octocrab::params::State::Closed,
-                _ => octocrab::params::State::All,
-            });
-        }
-
-        if let Some(labels) = labels {
-            issues_handler = issues_handler.labels(&[labels]);
-        }
-
-        let page = issues_handler
+        let page = self
+            .octocrab
+            .issues(owner, repo)
             .list()
+            .state(state_param)
             .send()
             .await
             .with_context(|| format!("Failed to list issues from {}/{}", owner, repo))?;
@@ -244,9 +238,16 @@ impl GitHubClient {
             branch_name, from_sha, owner, repo
         );
 
-        self.octocrab
-            .repos(owner, repo)
-            .create_ref(&format!("refs/heads/{}", branch_name), from_sha)
+        // Use the API endpoint directly
+        let _: serde_json::Value = self
+            .octocrab
+            .post(
+                format!("/repos/{}/{}/git/refs", owner, repo),
+                Some(&serde_json::json!({
+                    "ref": format!("refs/heads/{}", branch_name),
+                    "sha": from_sha
+                })),
+            )
             .await
             .with_context(|| {
                 format!(
@@ -260,6 +261,7 @@ impl GitHubClient {
     }
 
     /// 📝 Update file content in repository
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_file(
         &self,
         owner: &str,
@@ -270,24 +272,33 @@ impl GitHubClient {
         branch: &str,
         sha: Option<&str>,
     ) -> Result<()> {
+        use base64::Engine;
         info!(
             "📝 Updating file {} in branch {} of {}/{}",
             path, branch, owner, repo
         );
 
-        let encoded_content = base64::encode(content);
+        let encoded_content = base64::engine::general_purpose::STANDARD.encode(content);
 
-        let mut request = self
-            .octocrab
-            .repos(owner, repo)
-            .update_file(path, message, &encoded_content, sha.unwrap_or(""));
+        let mut body = serde_json::json!({
+            "message": message,
+            "content": encoded_content,
+        });
 
-        if branch != "main" && branch != "master" {
-            request = request.branch(branch);
+        if let Some(sha) = sha {
+            body["sha"] = serde_json::json!(sha);
         }
 
-        request
-            .send()
+        if branch != "main" && branch != "master" {
+            body["branch"] = serde_json::json!(branch);
+        }
+
+        let _: serde_json::Value = self
+            .octocrab
+            .put(
+                format!("/repos/{}/{}/contents/{}", owner, repo, path),
+                Some(&body),
+            )
             .await
             .with_context(|| {
                 format!(
@@ -307,13 +318,16 @@ impl GitHubClient {
             username, owner, repo
         );
 
-        match self
+        // Use the API endpoint directly to check collaborator status
+        let result: Result<serde_json::Value, _> = self
             .octocrab
-            .repos(owner, repo)
-            .collaborators()
-            .check_permissions(username)
-            .await
-        {
+            .get(
+                format!("/repos/{}/{}/collaborators/{}", owner, repo, username),
+                None::<&()>,
+            )
+            .await;
+
+        match result {
             Ok(_) => {
                 info!("✅ {} is a collaborator on {}/{}", username, owner, repo);
                 Ok(true)
@@ -323,5 +337,45 @@ impl GitHubClient {
                 Ok(false)
             }
         }
+    }
+
+    /// 🎫 Create a new issue in a repository
+    pub async fn create_issue(
+        &self,
+        owner: &str,
+        repo: &str,
+        title: &str,
+        body: &str,
+        labels: Option<&[String]>,
+        assignees: Option<&[String]>,
+    ) -> Result<Issue> {
+        info!(
+            "🎫 Creating issue '{}' in {}/{}",
+            title, owner, repo
+        );
+
+        let issues_handler = self.octocrab.issues(owner, repo);
+        let mut issue_builder = issues_handler.create(title).body(body);
+
+        if let Some(labels) = labels {
+            issue_builder = issue_builder.labels(labels.to_vec());
+        }
+
+        if let Some(assignees) = assignees {
+            issue_builder = issue_builder.assignees(assignees.to_vec());
+        }
+
+        let issue = issue_builder
+            .send()
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to create issue '{}' in {}/{}",
+                    title, owner, repo
+                )
+            })?;
+
+        info!("✅ Issue #{} created successfully: {}", issue.number, issue.html_url);
+        Ok(issue)
     }
 }

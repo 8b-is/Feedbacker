@@ -340,17 +340,108 @@ async fn determine_auto_assignee(issue: &IssueData) -> Option<String> {
     let content = format!("{} {}", issue.title, issue.body.as_deref().unwrap_or(""));
     let content_lower = content.to_lowercase();
 
-    // Auto-assign specific types of issues
-    if content_lower.contains("documentation") || content_lower.contains("readme") {
-        Some("aye-is".to_string()) // Aye handles docs
-    } else if content_lower.contains("critical") || content_lower.contains("urgent") {
-        Some("aye-is".to_string()) // Auto-assign critical issues
+    // Auto-assign specific types of issues to aye-is
+    let should_auto_assign = content_lower.contains("documentation")
+        || content_lower.contains("readme")
+        || content_lower.contains("critical")
+        || content_lower.contains("urgent");
+
+    if should_auto_assign {
+        Some("aye-is".to_string())
     } else {
         None // Let the team manually assign
     }
 }
 
-/// 🔧 Manual issue management endpoints
+// 🔧 Manual issue management endpoints
+
+/// 🎫 Request to create a new issue
+#[derive(Debug, Deserialize)]
+pub struct CreateIssueRequest {
+    pub owner: String,
+    pub repo: String,
+    pub title: String,
+    pub body: String,
+    #[serde(default)]
+    pub labels: Vec<String>,
+    #[serde(default)]
+    pub assignees: Vec<String>,
+}
+
+/// 🎫 Response after creating an issue
+#[derive(Debug, Serialize)]
+pub struct CreateIssueResponse {
+    pub issue_number: u64,
+    pub html_url: String,
+    pub title: String,
+    pub state: String,
+}
+
+/// 🎫 Create a new issue in a repository (for AI to submit issues)
+pub async fn create_issue(
+    State(app_state): State<AppState>,
+    Json(request): Json<CreateIssueRequest>,
+) -> Response {
+    info!(
+        "🎫 Creating issue '{}' in {}/{}",
+        request.title, request.owner, request.repo
+    );
+
+    let github_client = match GitHubClient::new(&app_state.config.github.token) {
+        Ok(client) => client,
+        Err(e) => {
+            error!("❌ Failed to create GitHub client: {:#}", e);
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(
+                    "github_client_error".to_string(),
+                    "Failed to create GitHub client".to_string(),
+                    None,
+                )),
+            ).into_response();
+        }
+    };
+
+    let labels = if request.labels.is_empty() { None } else { Some(request.labels.as_slice()) };
+    let assignees = if request.assignees.is_empty() { None } else { Some(request.assignees.as_slice()) };
+
+    match github_client.create_issue(
+        &request.owner,
+        &request.repo,
+        &request.title,
+        &request.body,
+        labels,
+        assignees,
+    ).await {
+        Ok(issue) => {
+            info!("✅ Issue #{} created in {}/{}", issue.number, request.owner, request.repo);
+            let response = CreateIssueResponse {
+                issue_number: issue.number,
+                html_url: issue.html_url.to_string(),
+                title: issue.title,
+                state: format!("{:?}", issue.state),
+            };
+            (
+                StatusCode::CREATED,
+                Json(ApiResponse::success(
+                    "Issue created successfully".to_string(),
+                    response,
+                )),
+            ).into_response()
+        }
+        Err(e) => {
+            error!("❌ Failed to create issue: {:#}", e);
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ApiResponse::<()>::error(
+                    "issue_creation_failed".to_string(),
+                    "Failed to create issue".to_string(),
+                    Some(serde_json::json!({ "error": e.to_string() })),
+                )),
+            ).into_response()
+        }
+    }
+}
 
 /// 📝 Add comment to issue
 pub async fn add_issue_comment(

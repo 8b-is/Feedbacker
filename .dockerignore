@@ -1,0 +1,61 @@
+# 🚢 Feedbacker Docker Ignore
+# Keep our builds clean and fast! ⚡
+
+# Git
+.git
+.gitignore
+
+# Build artifacts
+target/
+*.rs.bk
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment files (use docker-compose for config)
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# Test files
+tests/
+*.test
+
+# Development files
+.cargo/
+rustfmt.toml
+clippy.toml
+
+# SSH keys (mount at runtime)
+ssh/
+*.pem
+*.key
+id_rsa
+id_ed25519
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml

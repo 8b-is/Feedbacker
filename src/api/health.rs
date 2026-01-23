@@ -345,9 +345,7 @@ async fn check_all_components(app_state: &AppState) -> ComponentHealth {
 
 /// 🧠 Check OpenAI API health
 async fn check_openai_health(app_state: &AppState) -> Option<ComponentStatus> {
-    if app_state.config.llm.openai.is_none() {
-        return None;
-    }
+    app_state.config.llm.openai.as_ref()?;
 
     let now = chrono::Utc::now();
 
@@ -363,9 +361,7 @@ async fn check_openai_health(app_state: &AppState) -> Option<ComponentStatus> {
 
 /// 🎭 Check Anthropic API health
 async fn check_anthropic_health(app_state: &AppState) -> Option<ComponentStatus> {
-    if app_state.config.llm.anthropic.is_none() {
-        return None;
-    }
+    app_state.config.llm.anthropic.as_ref()?;
 
     let now = chrono::Utc::now();
 
@@ -506,12 +502,12 @@ fn get_available_memory() -> Option<u64> {
     Some(1024 * 1024 * 1024 * 2) // 2 GB
 }
 
-impl ToString for crate::config::Environment {
-    fn to_string(&self) -> String {
+impl std::fmt::Display for crate::config::Environment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            crate::config::Environment::Development => "development".to_string(),
-            crate::config::Environment::Staging => "staging".to_string(),
-            crate::config::Environment::Production => "production".to_string(),
+            crate::config::Environment::Development => write!(f, "development"),
+            crate::config::Environment::Staging => write!(f, "staging"),
+            crate::config::Environment::Production => write!(f, "production"),
         }
     }
 }

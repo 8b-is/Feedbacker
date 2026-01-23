@@ -157,6 +157,8 @@ fn create_router(app_state: api::AppState, config: &Config) -> Result<Router> {
         .route("/api/webhook/github", post(api::webhooks::github_webhook))
         // 🎯 GitHub issue automation webhooks
         .route("/api/webhook/issues", post(api::issue_hooks::github_issue_webhook))
+        // 🎫 Create new issues (for AI to submit issues!)
+        .route("/api/issues", post(api::issue_hooks::create_issue))
         // 🔧 Manual issue management endpoints
         .route("/api/issues/:owner/:repo/:issue_number/comment", post(api::issue_hooks::add_issue_comment))
         .route("/api/issues/:owner/:repo/:issue_number/labels", post(api::issue_hooks::add_issue_labels))
