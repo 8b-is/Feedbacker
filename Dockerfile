@@ -2,7 +2,7 @@
 # Built with love by Aye & Hue - Making deployments as smooth as sailing! ⛵
 # Stage 1: Build environment
 
-FROM rust:1.85-bookworm AS builder
+FROM rust:latest AS builder
 
 # Install build dependencies
 RUN apt-get update && apt-get install -y \
@@ -13,10 +13,12 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Copy manifest for dependency caching
+# Copy manifests for dependency caching
 COPY Cargo.toml ./
+# Copy Cargo.lock if it exists (for reproducible builds)
+COPY Cargo.loc[k] ./
 
-# Create dummy main to build dependencies (generates Cargo.lock if missing)
+# Create dummy main to build dependencies
 RUN mkdir src && \
     echo "fn main() {}" > src/main.rs && \
     cargo build --release && \
@@ -42,6 +44,7 @@ RUN apt-get update && apt-get install -y \
     libpq5 \
     openssh-client \
     git \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Create non-root user for security
