@@ -1,0 +1,6 @@
+# Local development override - exposes port for testing
+# This file is automatically merged with docker-compose.yml when running locally
+services:
+  feedbacker:
+    ports:
+      - "3000:3000"

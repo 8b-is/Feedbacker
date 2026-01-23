@@ -193,6 +193,7 @@ fn is_public_path(path: &str) -> bool {
         "/static/", // Static assets
         "/assets/", // Assets
         "/favicon", // Favicon
+        "/admin",   // Admin pages (TODO: add proper auth flow)
     ];
 
     public_prefixes

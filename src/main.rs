@@ -187,10 +187,26 @@ fn create_router(app_state: api::AppState, config: &Config) -> Result<Router> {
         .route("/docs", get(api::web::docs_page))
         .route("/about", get(api::web::about_page));
 
+    // 🔧 Create the admin router for system management
+    let admin_router = Router::new()
+        // 📊 Admin dashboard - system overview
+        .route("/admin", get(api::admin::admin_dashboard))
+        // 📝 Feedback management
+        .route("/admin/feedback", get(api::admin::admin_feedback))
+        // 🏠 Projects management
+        .route("/admin/projects", get(api::admin::admin_projects))
+        // 👥 Users management
+        .route("/admin/users", get(api::admin::admin_users))
+        // 🔄 Background jobs monitoring
+        .route("/admin/jobs", get(api::admin::admin_jobs))
+        // ⚙️ System settings
+        .route("/admin/settings", get(api::admin::admin_settings));
+
     // 🛡️ Apply middleware layers (like adding layers to a delicious cake!)
     let app = Router::new()
         .merge(api_router)
         .merge(web_router)
+        .merge(admin_router)
         .layer(
             ServiceBuilder::new()
                 // 📊 Tracing layer for request logging

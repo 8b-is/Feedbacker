@@ -13,6 +13,7 @@ use uuid::Uuid;
 use crate::config::Config;
 
 // 📦 Re-export all our API modules
+pub mod admin; // 🔧 Admin interface
 pub mod auth; // 🔐 Authentication endpoints
 pub mod feedback; // 📝 Feedback submission and management
 pub mod health; // 💚 Health check endpoints
