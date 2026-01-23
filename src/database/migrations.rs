@@ -112,27 +112,33 @@ fn calculate_checksum(sql: &str) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// 🔪 Split SQL into statements (handles $$ quoted functions)
+/// 🔪 Split SQL into statements (handles $$ functions and parentheses)
 fn split_sql_statements(sql: &str) -> Vec<String> {
     let mut statements = Vec::new();
     let mut current = String::new();
     let mut in_dollar_quote = false;
+    let mut paren_depth: i32 = 0;
 
-    for line in sql.lines() {
-        let trimmed = line.trim();
+    for ch in sql.chars() {
+        current.push(ch);
 
         // Track $$ blocks for PL/pgSQL
-        let dollar_count = trimmed.matches("$$").count();
-        if dollar_count % 2 == 1 {
+        if current.ends_with("$$") {
             in_dollar_quote = !in_dollar_quote;
         }
 
-        current.push_str(line);
-        current.push('\n');
-
-        if !in_dollar_quote && trimmed.ends_with(';') {
-            statements.push(current.clone());
-            current.clear();
+        // Track parentheses (but not inside $$ blocks)
+        if !in_dollar_quote {
+            match ch {
+                '(' => paren_depth += 1,
+                ')' => paren_depth = paren_depth.saturating_sub(1),
+                ';' if paren_depth == 0 => {
+                    // End of statement
+                    statements.push(current.clone());
+                    current.clear();
+                }
+                _ => {}
+            }
         }
     }
 
