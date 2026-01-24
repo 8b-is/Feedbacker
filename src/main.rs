@@ -189,6 +189,11 @@ fn create_router(app_state: api::AppState, config: &Config) -> Result<Router> {
 
     // 🔧 Create the admin router for system management
     let admin_router = Router::new()
+        // 🔐 Admin login page
+        .route("/admin/login", get(api::admin::admin_login))
+        .route("/admin/login", post(api::admin::admin_login_post))
+        // 🚪 Admin logout
+        .route("/admin/logout", get(api::admin::admin_logout))
         // 📊 Admin dashboard - system overview
         .route("/admin", get(api::admin::admin_dashboard))
         // 📝 Feedback management

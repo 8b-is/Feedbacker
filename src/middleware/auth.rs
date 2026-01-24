@@ -190,10 +190,10 @@ fn is_public_path(path: &str) -> bool {
 
     // 🎯 Check prefixes for public endpoints
     let public_prefixes = [
-        "/static/", // Static assets
-        "/assets/", // Assets
-        "/favicon", // Favicon
-        "/admin",   // Admin pages (TODO: add proper auth flow)
+        "/static/",  // Static assets
+        "/assets/",  // Assets
+        "/favicon",  // Favicon
+        "/admin",    // Admin pages (auth handled by admin module via cookies)
     ];
 
     public_prefixes

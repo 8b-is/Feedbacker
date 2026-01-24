@@ -4,13 +4,235 @@
 use crate::api::AppState;
 use axum::{
     extract::{Path, Query, State},
-    response::{Html, IntoResponse, Response},
-    http::StatusCode,
+    response::{Html, IntoResponse, Response, Redirect},
+    http::{StatusCode, HeaderMap, header},
     Json,
+    Form,
 };
+use axum_extra::extract::cookie::{Cookie, CookieJar};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
-use tracing::info;
+use tracing::{info, warn};
+
+/// 🔐 Admin session cookie name
+const ADMIN_SESSION_COOKIE: &str = "feedbacker_admin_session";
+
+/// 🔐 Login form data
+#[derive(Debug, Deserialize)]
+pub struct LoginForm {
+    pub username: String,
+    pub password: String,
+}
+
+/// 🔐 Check if admin is authenticated via cookie
+fn is_admin_authenticated(jar: &CookieJar, app_state: &AppState) -> bool {
+    if app_state.config.auth.admin_password.is_empty() {
+        // No password configured = no auth required (dev mode)
+        return true;
+    }
+
+    if let Some(cookie) = jar.get(ADMIN_SESSION_COOKIE) {
+        // Simple token check: hash of username + password + secret
+        let expected_token = generate_session_token(
+            &app_state.config.auth.admin_username,
+            &app_state.config.auth.admin_password,
+            &app_state.config.auth.jwt_secret,
+        );
+        return cookie.value() == expected_token;
+    }
+    false
+}
+
+/// 🔑 Generate a simple session token
+fn generate_session_token(username: &str, password: &str, secret: &str) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    format!("{}:{}:{}", username, password, secret).hash(&mut hasher);
+    format!("{:x}", hasher.finish())
+}
+
+/// 🔐 Admin Login Page
+pub async fn admin_login(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> impl IntoResponse {
+    // If already authenticated, redirect to dashboard
+    if is_admin_authenticated(&jar, &app_state) {
+        return Redirect::to("/admin").into_response();
+    }
+
+    Html(render_login_page(None)).into_response()
+}
+
+/// 🔐 Admin Login POST Handler
+pub async fn admin_login_post(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+    Form(form): Form<LoginForm>,
+) -> impl IntoResponse {
+    let expected_username = &app_state.config.auth.admin_username;
+    let expected_password = &app_state.config.auth.admin_password;
+
+    if form.username == *expected_username && form.password == *expected_password {
+        info!("🔓 Admin login successful for user: {}", form.username);
+
+        let token = generate_session_token(
+            expected_username,
+            expected_password,
+            &app_state.config.auth.jwt_secret,
+        );
+
+        let cookie = Cookie::build((ADMIN_SESSION_COOKIE, token))
+            .path("/admin")
+            .http_only(true)
+            .secure(app_state.config.is_production())
+            .max_age(time::Duration::hours(24))
+            .build();
+
+        (jar.add(cookie), Redirect::to("/admin")).into_response()
+    } else {
+        warn!("🚫 Admin login failed for user: {}", form.username);
+        Html(render_login_page(Some("Invalid username or password"))).into_response()
+    }
+}
+
+/// 🚪 Admin Logout Handler
+pub async fn admin_logout(jar: CookieJar) -> impl IntoResponse {
+    info!("🚪 Admin logged out");
+
+    let cookie = Cookie::build((ADMIN_SESSION_COOKIE, ""))
+        .path("/admin")
+        .max_age(time::Duration::seconds(0))
+        .build();
+
+    (jar.remove(cookie), Redirect::to("/admin/login")).into_response()
+}
+
+/// 🔐 Render login page HTML
+fn render_login_page(error: Option<&str>) -> String {
+    let error_html = error.map(|e| format!(
+        r#"<div class="error-message">{}</div>"#, e
+    )).unwrap_or_default();
+
+    format!(r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - Feedbacker</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0f0f23;
+            color: #cccccc;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+        .login-container {{
+            background: #1a1a2e;
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            width: 100%;
+            max-width: 400px;
+        }}
+        .login-container h1 {{
+            color: #00d4ff;
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .form-group {{
+            margin-bottom: 20px;
+        }}
+        .form-group label {{
+            display: block;
+            margin-bottom: 8px;
+            color: #888;
+        }}
+        .form-group input {{
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background: #0f0f23;
+            color: #fff;
+            font-size: 16px;
+        }}
+        .form-group input:focus {{
+            outline: none;
+            border-color: #00d4ff;
+        }}
+        .btn {{
+            width: 100%;
+            padding: 14px;
+            background: #00d4ff;
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }}
+        .btn:hover {{
+            background: #00a8cc;
+        }}
+        .error-message {{
+            background: #3d0000;
+            color: #ff4444;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }}
+        .back-link {{
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #888;
+            text-decoration: none;
+        }}
+        .back-link:hover {{
+            color: #00d4ff;
+        }}
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>🔐 Admin Login</h1>
+        {error_html}
+        <form method="POST" action="/admin/login">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autocomplete="username">
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+            <button type="submit" class="btn">Login</button>
+        </form>
+        <a href="/" class="back-link">← Back to Site</a>
+    </div>
+</body>
+</html>
+"#, error_html = error_html)
+}
+
+/// 🔐 Middleware-like function to check auth and redirect if not logged in
+fn require_admin_auth(jar: &CookieJar, app_state: &AppState) -> Option<Response> {
+    if !is_admin_authenticated(jar, app_state) {
+        Some(Redirect::to("/admin/login").into_response())
+    } else {
+        None
+    }
+}
 
 /// 📊 Dashboard statistics
 #[derive(Debug, Serialize)]
@@ -34,7 +256,13 @@ pub struct FeedbackItem {
 }
 
 /// 🏠 Admin Dashboard
-pub async fn admin_dashboard(State(app_state): State<AppState>) -> impl IntoResponse {
+pub async fn admin_dashboard(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
     info!("🔧 Admin dashboard accessed");
 
     let stats = get_dashboard_stats(&app_state).await.unwrap_or(DashboardStats {
@@ -212,6 +440,7 @@ pub async fn admin_dashboard(State(app_state): State<AppState>) -> impl IntoResp
             <a href="/admin/jobs">⚙️ Background Jobs</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
+            <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
         </nav>
     </div>
 
@@ -268,11 +497,17 @@ pub async fn admin_dashboard(State(app_state): State<AppState>) -> impl IntoResp
         stats.completed_feedback,
         stats.failed_feedback,
         render_feedback_table(&recent_feedback),
-    ))
+    )).into_response()
 }
 
 /// 📝 Feedback Management Page
-pub async fn admin_feedback(State(app_state): State<AppState>) -> impl IntoResponse {
+pub async fn admin_feedback(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
     info!("🔧 Admin feedback page accessed");
 
     let feedback = get_recent_feedback(&app_state, 50).await.unwrap_or_default();
@@ -333,6 +568,7 @@ pub async fn admin_feedback(State(app_state): State<AppState>) -> impl IntoRespo
             <a href="/admin/jobs">⚙️ Background Jobs</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
+            <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
         </nav>
     </div>
     <div class="main">
@@ -350,11 +586,17 @@ pub async fn admin_feedback(State(app_state): State<AppState>) -> impl IntoRespo
     </div>
 </body>
 </html>
-"#, render_feedback_table(&feedback)))
+"#, render_feedback_table(&feedback))).into_response()
 }
 
 /// 🏠 Projects Management Page
-pub async fn admin_projects(State(app_state): State<AppState>) -> impl IntoResponse {
+pub async fn admin_projects(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
     info!("🔧 Admin projects page accessed");
 
     Html(r#"
@@ -389,6 +631,7 @@ pub async fn admin_projects(State(app_state): State<AppState>) -> impl IntoRespo
             <a href="/admin/jobs">⚙️ Background Jobs</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
+            <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
         </nav>
     </div>
     <div class="main">
@@ -402,11 +645,17 @@ pub async fn admin_projects(State(app_state): State<AppState>) -> impl IntoRespo
     </div>
 </body>
 </html>
-"#)
+"#).into_response()
 }
 
 /// 👥 Users Management Page
-pub async fn admin_users(State(app_state): State<AppState>) -> impl IntoResponse {
+pub async fn admin_users(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
     info!("🔧 Admin users page accessed");
 
     Html(r#"
@@ -441,6 +690,7 @@ pub async fn admin_users(State(app_state): State<AppState>) -> impl IntoResponse
             <a href="/admin/jobs">⚙️ Background Jobs</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
+            <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
         </nav>
     </div>
     <div class="main">
@@ -454,11 +704,17 @@ pub async fn admin_users(State(app_state): State<AppState>) -> impl IntoResponse
     </div>
 </body>
 </html>
-"#)
+"#).into_response()
 }
 
 /// ⚙️ Background Jobs Page
-pub async fn admin_jobs(State(app_state): State<AppState>) -> impl IntoResponse {
+pub async fn admin_jobs(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
     info!("🔧 Admin jobs page accessed");
 
     Html(r#"
@@ -493,6 +749,7 @@ pub async fn admin_jobs(State(app_state): State<AppState>) -> impl IntoResponse 
             <a href="/admin/jobs" class="active">⚙️ Background Jobs</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
+            <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
         </nav>
     </div>
     <div class="main">
@@ -506,11 +763,17 @@ pub async fn admin_jobs(State(app_state): State<AppState>) -> impl IntoResponse 
     </div>
 </body>
 </html>
-"#)
+"#).into_response()
 }
 
 /// 🔧 Settings Page
-pub async fn admin_settings(State(app_state): State<AppState>) -> impl IntoResponse {
+pub async fn admin_settings(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
     info!("🔧 Admin settings page accessed");
 
     Html(format!(r#"
@@ -554,6 +817,7 @@ pub async fn admin_settings(State(app_state): State<AppState>) -> impl IntoRespo
             <a href="/admin/jobs">⚙️ Background Jobs</a>
             <a href="/admin/settings" class="active">🔧 Settings</a>
             <a href="/">← Back to Site</a>
+            <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
         </nav>
     </div>
     <div class="main">
@@ -624,7 +888,7 @@ pub async fn admin_settings(State(app_state): State<AppState>) -> impl IntoRespo
         app_state.config.llm.default_provider,
         app_state.config.rate_limiting.requests_per_minute,
         app_state.config.rate_limiting.feedback_per_hour,
-    ))
+    )).into_response()
 }
 
 // Helper functions

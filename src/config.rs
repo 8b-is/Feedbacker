@@ -124,6 +124,10 @@ pub struct AuthConfig {
     pub password_salt_rounds: u32,
     /// 🔄 Enable user registration
     pub enable_registration: bool,
+    /// 🔧 Admin username (from ADMIN_USERNAME env)
+    pub admin_username: String,
+    /// 🔧 Admin password (from ADMIN_PASSWORD env)
+    pub admin_password: String,
 }
 
 // 🚦 Rate limiting configuration
@@ -399,6 +403,10 @@ impl AuthConfig {
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
                 .context("Invalid ENABLE_REGISTRATION")?,
+            admin_username: env::var("ADMIN_USERNAME")
+                .unwrap_or_else(|_| "admin".to_string()),
+            admin_password: env::var("ADMIN_PASSWORD")
+                .unwrap_or_else(|_| "".to_string()),
         })
     }
 }

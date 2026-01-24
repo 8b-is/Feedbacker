@@ -23,6 +23,8 @@ services:
       - RATE_LIMIT_FEEDBACK_PER_HOUR=${RATE_LIMIT_FEEDBACK_PER_HOUR:-10}
       - ENABLE_BACKGROUND_JOBS=true
       - ENABLE_GITHUB_WEBHOOKS=true
+      - ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
     volumes:
       - feedbacker-logs:/app/logs
     depends_on:

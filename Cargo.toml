@@ -14,7 +14,7 @@ categories = ["web-programming", "development-tools"]
 [dependencies]
 # Web framework - Axum is fast, type-safe, and works great with Tokio!
 axum = "0.7"
-axum-extra = { version = "0.9", features = ["typed-header"] }
+axum-extra = { version = "0.9", features = ["typed-header", "cookie"] }
 tower = { version = "0.5", features = ["full"] }
 tower-http = { version = "0.6", features = ["fs", "trace", "cors", "compression-full"] }
 
@@ -44,6 +44,7 @@ uuid = { version = "1.11", features = ["v4", "serde"] }
 
 # Date/Time handling
 chrono = { version = "0.4", features = ["serde"] }
+time = "0.3"
 
 # Configuration management
 config = "0.14"
