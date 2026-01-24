@@ -891,6 +891,284 @@ pub async fn admin_settings(
     )).into_response()
 }
 
+/// 🤖 MCP Analytics Page
+pub async fn admin_mcp(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
+    info!("🔧 Admin MCP page accessed");
+
+    let stats = get_mcp_stats(&app_state).await.unwrap_or_default();
+    let current_version = get_setting(&app_state, "smart_tree_latest_version").await.unwrap_or_else(|| "Not set".to_string());
+
+    Html(format!(r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Analytics - Feedbacker Admin</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f23; color: #cccccc; min-height: 100vh; }}
+        .sidebar {{ position: fixed; left: 0; top: 0; width: 250px; height: 100vh; background: #1a1a2e; padding: 20px; border-right: 1px solid #333; }}
+        .sidebar h1 {{ color: #00d4ff; font-size: 1.5em; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #333; }}
+        .sidebar nav a {{ display: block; color: #888; text-decoration: none; padding: 12px 15px; margin: 5px 0; border-radius: 8px; transition: all 0.2s; }}
+        .sidebar nav a:hover, .sidebar nav a.active {{ background: #252542; color: #00d4ff; }}
+        .main {{ margin-left: 250px; padding: 30px; }}
+        .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }}
+        .header h2 {{ color: #fff; font-size: 1.8em; }}
+        .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }}
+        .stat-card {{ background: #1a1a2e; padding: 25px; border-radius: 12px; border: 1px solid #333; }}
+        .stat-card h3 {{ color: #888; font-size: 0.9em; margin-bottom: 10px; }}
+        .stat-card .value {{ font-size: 2.5em; font-weight: bold; color: #00d4ff; }}
+        .card {{ background: #1a1a2e; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px; }}
+        .card-header {{ padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }}
+        .card-header h3 {{ color: #fff; }}
+        .card-body {{ padding: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        th, td {{ padding: 12px 15px; text-align: left; border-bottom: 1px solid #333; }}
+        th {{ color: #888; font-weight: 500; font-size: 0.85em; text-transform: uppercase; }}
+        .form-group {{ margin-bottom: 15px; }}
+        .form-group label {{ display: block; margin-bottom: 8px; color: #888; }}
+        .form-group input {{ width: 100%; padding: 10px; background: #0f0f23; border: 1px solid #333; border-radius: 8px; color: #fff; }}
+        .btn {{ padding: 10px 20px; background: #00d4ff; color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }}
+        .btn:hover {{ background: #00a8cc; }}
+        .empty-state {{ text-align: center; padding: 40px; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h1>🚢 Feedbacker</h1>
+        <nav>
+            <a href="/admin">📊 Dashboard</a>
+            <a href="/admin/feedback">📝 Feedback</a>
+            <a href="/admin/projects">🏠 Projects</a>
+            <a href="/admin/users">👥 Users</a>
+            <a href="/admin/jobs">⚙️ Background Jobs</a>
+            <a href="/admin/mcp" class="active">🤖 MCP Analytics</a>
+            <a href="/admin/settings">🔧 Settings</a>
+            <a href="/">← Back to Site</a>
+            <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
+        </nav>
+    </div>
+    <div class="main">
+        <div class="header">
+            <h2>🤖 MCP Analytics</h2>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <h3>Total Checks</h3>
+                <div class="value">{}</div>
+            </div>
+            <div class="stat-card">
+                <h3>Current Version</h3>
+                <div class="value" style="font-size: 1.5em;">{}</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>🔧 Set Smart Tree Version</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/admin/mcp/set-version">
+                    <div class="form-group">
+                        <label for="version">Version (e.g., 0.9.0)</label>
+                        <input type="text" id="version" name="version" placeholder="0.9.0" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="release_notes">Release Notes</label>
+                        <input type="text" id="release_notes" name="release_notes" placeholder="New features and improvements...">
+                    </div>
+                    <button type="submit" class="btn">Update Version</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>📊 Platform Distribution</h3>
+            </div>
+            <div class="card-body">
+                {}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>📈 Version Distribution</h3>
+            </div>
+            <div class="card-body">
+                {}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>🕐 Recent Checks</h3>
+            </div>
+            <div class="card-body">
+                {}
+            </div>
+        </div>
+    </div>
+</body>
+</html>
+"#,
+        stats.total_checks,
+        current_version,
+        render_platform_table(&stats.platforms),
+        render_version_table(&stats.versions),
+        render_recent_checks_table(&stats.recent_checks),
+    )).into_response()
+}
+
+/// 🔧 Set Smart Tree version (admin POST handler)
+#[derive(Debug, Deserialize)]
+pub struct SetVersionForm {
+    pub version: String,
+    pub release_notes: Option<String>,
+}
+
+pub async fn admin_mcp_set_version(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+    Form(form): Form<SetVersionForm>,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
+    info!("🔧 Setting Smart Tree version to: {}", form.version);
+
+    // Save version to settings
+    let _ = set_setting(&app_state, "smart_tree_latest_version", &form.version).await;
+    if let Some(notes) = form.release_notes {
+        if !notes.is_empty() {
+            let _ = set_setting(&app_state, "smart_tree_release_notes", &notes).await;
+        }
+    }
+
+    Redirect::to("/admin/mcp").into_response()
+}
+
+// MCP Stats structures
+#[derive(Debug, Default)]
+struct McpStats {
+    total_checks: i64,
+    platforms: Vec<(String, String, i64)>,  // (platform, arch, count)
+    versions: Vec<(String, i64)>,           // (version, count)
+    recent_checks: Vec<(String, String, String, String)>, // (version, platform, arch, timestamp)
+}
+
+async fn get_mcp_stats(app_state: &AppState) -> Option<McpStats> {
+    let total_checks: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM mcp_analytics")
+        .fetch_one(&app_state.db_pool)
+        .await
+        .unwrap_or(0);
+
+    let platform_rows = sqlx::query(
+        "SELECT platform, arch, COUNT(*) as count FROM mcp_analytics GROUP BY platform, arch ORDER BY count DESC LIMIT 20"
+    )
+    .fetch_all(&app_state.db_pool)
+    .await
+    .unwrap_or_default();
+
+    let platforms: Vec<(String, String, i64)> = platform_rows
+        .iter()
+        .map(|row| (row.get("platform"), row.get("arch"), row.get("count")))
+        .collect();
+
+    let version_rows = sqlx::query(
+        "SELECT client_version, COUNT(*) as count FROM mcp_analytics GROUP BY client_version ORDER BY count DESC LIMIT 20"
+    )
+    .fetch_all(&app_state.db_pool)
+    .await
+    .unwrap_or_default();
+
+    let versions: Vec<(String, i64)> = version_rows
+        .iter()
+        .map(|row| (row.get("client_version"), row.get("count")))
+        .collect();
+
+    let recent_rows = sqlx::query(
+        "SELECT client_version, platform, arch, checked_at FROM mcp_analytics ORDER BY checked_at DESC LIMIT 20"
+    )
+    .fetch_all(&app_state.db_pool)
+    .await
+    .unwrap_or_default();
+
+    let recent_checks: Vec<(String, String, String, String)> = recent_rows
+        .iter()
+        .map(|row| {
+            let ts: chrono::DateTime<chrono::Utc> = row.get("checked_at");
+            (row.get("client_version"), row.get("platform"), row.get("arch"), ts.format("%Y-%m-%d %H:%M:%S").to_string())
+        })
+        .collect();
+
+    Some(McpStats { total_checks, platforms, versions, recent_checks })
+}
+
+async fn get_setting(app_state: &AppState, key: &str) -> Option<String> {
+    sqlx::query_scalar::<_, String>("SELECT value FROM settings WHERE key = $1")
+        .bind(key)
+        .fetch_optional(&app_state.db_pool)
+        .await
+        .ok()
+        .flatten()
+}
+
+async fn set_setting(app_state: &AppState, key: &str, value: &str) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO settings (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()"
+    )
+    .bind(key)
+    .bind(value)
+    .execute(&app_state.db_pool)
+    .await?;
+    Ok(())
+}
+
+fn render_platform_table(platforms: &[(String, String, i64)]) -> String {
+    if platforms.is_empty() {
+        return r#"<div class="empty-state">No data yet</div>"#.to_string();
+    }
+
+    let rows: String = platforms.iter().map(|(platform, arch, count)| {
+        format!(r#"<tr><td>{}</td><td>{}</td><td>{}</td></tr>"#, platform, arch, count)
+    }).collect();
+
+    format!(r#"<table><thead><tr><th>Platform</th><th>Arch</th><th>Count</th></tr></thead><tbody>{}</tbody></table>"#, rows)
+}
+
+fn render_version_table(versions: &[(String, i64)]) -> String {
+    if versions.is_empty() {
+        return r#"<div class="empty-state">No data yet</div>"#.to_string();
+    }
+
+    let rows: String = versions.iter().map(|(version, count)| {
+        format!(r#"<tr><td>{}</td><td>{}</td></tr>"#, version, count)
+    }).collect();
+
+    format!(r#"<table><thead><tr><th>Version</th><th>Count</th></tr></thead><tbody>{}</tbody></table>"#, rows)
+}
+
+fn render_recent_checks_table(checks: &[(String, String, String, String)]) -> String {
+    if checks.is_empty() {
+        return r#"<div class="empty-state">No checks yet</div>"#.to_string();
+    }
+
+    let rows: String = checks.iter().map(|(version, platform, arch, ts)| {
+        format!(r#"<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#, version, platform, arch, ts)
+    }).collect();
+
+    format!(r#"<table><thead><tr><th>Version</th><th>Platform</th><th>Arch</th><th>Time</th></tr></thead><tbody>{}</tbody></table>"#, rows)
+}
+
 // Helper functions
 
 async fn get_dashboard_stats(app_state: &AppState) -> anyhow::Result<DashboardStats> {

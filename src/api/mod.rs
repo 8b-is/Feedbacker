@@ -18,6 +18,7 @@ pub mod auth; // 🔐 Authentication endpoints
 pub mod feedback; // 📝 Feedback submission and management
 pub mod health; // 💚 Health check endpoints
 pub mod issue_hooks; // 🎯 GitHub issue automation
+pub mod mcp; // 🤖 MCP (Model Context Protocol) for Smart Tree
 pub mod projects; // 🏠 Project management endpoints
 pub mod smart_tree; // 🌳 Smart Tree integration
 pub mod status; // 📊 Status checking endpoints

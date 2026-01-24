@@ -190,10 +190,11 @@ fn is_public_path(path: &str) -> bool {
 
     // 🎯 Check prefixes for public endpoints
     let public_prefixes = [
-        "/static/",  // Static assets
-        "/assets/",  // Assets
-        "/favicon",  // Favicon
-        "/admin",    // Admin pages (auth handled by admin module via cookies)
+        "/static/",    // Static assets
+        "/assets/",    // Assets
+        "/favicon",    // Favicon
+        "/admin",      // Admin pages (auth handled by admin module via cookies)
+        "/mcp/check",  // MCP version check (called by Smart Tree clients)
     ];
 
     public_prefixes

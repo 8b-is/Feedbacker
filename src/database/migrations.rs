@@ -302,6 +302,36 @@ CREATE TRIGGER update_feedback_updated_at BEFORE UPDATE ON feedback FOR EACH ROW
             "#.to_string(),
             down_sql: Some("DROP SCHEMA public CASCADE; CREATE SCHEMA public;".to_string()),
         },
+        Migration {
+            id: "v2_mcp_analytics".to_string(),
+            description: "Add MCP analytics and settings tables for Smart Tree".to_string(),
+            up_sql: r#"
+-- Settings table (key-value store)
+CREATE TABLE IF NOT EXISTS settings (
+    key VARCHAR(255) PRIMARY KEY,
+    value TEXT NOT NULL,
+    description TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- MCP Analytics - logs Smart Tree version checks
+CREATE TABLE IF NOT EXISTS mcp_analytics (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    client_version VARCHAR(50) NOT NULL,
+    platform VARCHAR(50) NOT NULL,
+    arch VARCHAR(50) NOT NULL,
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_mcp_analytics_checked_at ON mcp_analytics(checked_at);
+CREATE INDEX idx_mcp_analytics_platform ON mcp_analytics(platform, arch);
+CREATE INDEX idx_mcp_analytics_version ON mcp_analytics(client_version);
+
+-- Auto-update trigger for settings
+CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+            "#.to_string(),
+            down_sql: Some("DROP TABLE IF EXISTS mcp_analytics; DROP TABLE IF EXISTS settings;".to_string()),
+        },
     ]
 }
 

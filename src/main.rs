@@ -168,6 +168,10 @@ fn create_router(app_state: api::AppState, config: &Config) -> Result<Router> {
             "/api/smart-tree/latest",
             get(api::smart_tree::get_latest_version),
         )
+        // 🤖 MCP (Model Context Protocol) endpoints for Smart Tree
+        .route("/mcp/check", get(api::mcp::mcp_check))
+        .route("/mcp/stats", get(api::mcp::mcp_stats))
+        .route("/mcp/version", post(api::mcp::mcp_set_version))
         // 🔐 Authentication endpoints
         .route("/api/auth/login", post(api::auth::login))
         .route("/api/auth/logout", post(api::auth::logout))
@@ -204,6 +208,9 @@ fn create_router(app_state: api::AppState, config: &Config) -> Result<Router> {
         .route("/admin/users", get(api::admin::admin_users))
         // 🔄 Background jobs monitoring
         .route("/admin/jobs", get(api::admin::admin_jobs))
+        // 🤖 MCP Analytics
+        .route("/admin/mcp", get(api::admin::admin_mcp))
+        .route("/admin/mcp/set-version", post(api::admin::admin_mcp_set_version))
         // ⚙️ System settings
         .route("/admin/settings", get(api::admin::admin_settings));
 
