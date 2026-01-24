@@ -88,6 +88,11 @@ redis = { version = "0.27", features = ["tokio-comp", "connection-manager"], opt
 lazy_static = "1.5"
 base64 = "0.22"
 
+# GeoIP for location tracking
+maxminddb = "0.24"
+flate2 = "1.0"
+tar = "0.4"
+
 [dev-dependencies]
 # Testing utilities
 mockito = "1.6"

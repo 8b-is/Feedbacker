@@ -21,7 +21,7 @@ pub struct ProjectInfo {
 
 pub async fn list_projects(State(_app_state): State<AppState>) -> impl IntoResponse {
     // TODO: Implement project listing
-    let projects: Vec<ProjectInfo> = vec![];  // 🔧 Added explicit type annotation
+    let projects: Vec<ProjectInfo> = vec![]; // 🔧 Added explicit type annotation
     (
         StatusCode::OK,
         Json(ApiResponse::success(

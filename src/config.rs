@@ -403,10 +403,8 @@ impl AuthConfig {
                 .unwrap_or_else(|_| "true".to_string())
                 .parse()
                 .context("Invalid ENABLE_REGISTRATION")?,
-            admin_username: env::var("ADMIN_USERNAME")
-                .unwrap_or_else(|_| "admin".to_string()),
-            admin_password: env::var("ADMIN_PASSWORD")
-                .unwrap_or_else(|_| "".to_string()),
+            admin_username: env::var("ADMIN_USERNAME").unwrap_or_else(|_| "admin".to_string()),
+            admin_password: env::var("ADMIN_PASSWORD").unwrap_or_else(|_| "".to_string()),
         })
     }
 }

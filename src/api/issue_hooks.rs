@@ -73,21 +73,23 @@ pub async fn github_issue_webhook(
 ) -> Response {
     info!(
         "🎫 Received GitHub issue webhook: {} for issue #{} in {}",
-        payload.action,
-        payload.issue.number,
-        payload.repository.full_name
+        payload.action, payload.issue.number, payload.repository.full_name
     );
 
     match process_issue_event(&app_state, &payload).await {
         Ok(response) => {
-            info!("✅ Issue automation completed for #{}", payload.issue.number);
+            info!(
+                "✅ Issue automation completed for #{}",
+                payload.issue.number
+            );
             (
                 StatusCode::OK,
                 Json(ApiResponse::success(
                     "Issue automation completed".to_string(),
                     response,
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to process issue automation: {:#}", e);
@@ -98,7 +100,8 @@ pub async fn github_issue_webhook(
                     "Failed to process issue automation".to_string(),
                     Some(serde_json::json!({ "error": e.to_string() })),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }
@@ -146,33 +149,39 @@ async fn handle_issue_opened(
     // 🏷️ Auto-label based on issue content
     let labels_to_add = analyze_issue_for_labels(&payload.issue).await;
     if !labels_to_add.is_empty() {
-        github_client.add_labels_to_issue(
-            &payload.repository.owner.login,
-            &payload.repository.name,
-            payload.issue.number,
-            &labels_to_add,
-        ).await?;
+        github_client
+            .add_labels_to_issue(
+                &payload.repository.owner.login,
+                &payload.repository.name,
+                payload.issue.number,
+                &labels_to_add,
+            )
+            .await?;
         response.labels_applied = labels_to_add;
     }
 
     // 💬 Add welcome comment with helpful information
     let welcome_comment = create_welcome_comment(&payload.issue).await;
-    github_client.add_comment_to_issue(
-        &payload.repository.owner.login,
-        &payload.repository.name,
-        payload.issue.number,
-        &welcome_comment,
-    ).await?;
+    github_client
+        .add_comment_to_issue(
+            &payload.repository.owner.login,
+            &payload.repository.name,
+            payload.issue.number,
+            &welcome_comment,
+        )
+        .await?;
     response.comment_added = Some(welcome_comment);
 
     // 🎯 Auto-assign if it's a specific type of issue
     if let Some(assignee) = determine_auto_assignee(&payload.issue).await {
-        github_client.assign_issue(
-            &payload.repository.owner.login,
-            &payload.repository.name,
-            payload.issue.number,
-            &assignee,
-        ).await?;
+        github_client
+            .assign_issue(
+                &payload.repository.owner.login,
+                &payload.repository.name,
+                payload.issue.number,
+                &assignee,
+            )
+            .await?;
         response.assigned_to = Some(assignee);
     }
 
@@ -197,12 +206,14 @@ async fn handle_issue_closed(
     // 💬 Add thank you comment
     let thank_you_comment = "🎉 Thank you for reporting this issue! If you have any other feedback or feature requests, feel free to submit them through our Feedbacker service at f.8b.is. \n\nHappy coding! 🚢\n\n*- Aye & Hue*";
 
-    github_client.add_comment_to_issue(
-        &payload.repository.owner.login,
-        &payload.repository.name,
-        payload.issue.number,
-        thank_you_comment,
-    ).await?;
+    github_client
+        .add_comment_to_issue(
+            &payload.repository.owner.login,
+            &payload.repository.name,
+            payload.issue.number,
+            thank_you_comment,
+        )
+        .await?;
     response.comment_added = Some(thank_you_comment.to_string());
 
     Ok(response)
@@ -255,40 +266,45 @@ async fn analyze_issue_for_labels(issue: &IssueData) -> Vec<String> {
     let content_lower = content.to_lowercase();
 
     // 🐛 Bug detection
-    if content_lower.contains("bug") ||
-       content_lower.contains("error") ||
-       content_lower.contains("crash") ||
-       content_lower.contains("fail") {
+    if content_lower.contains("bug")
+        || content_lower.contains("error")
+        || content_lower.contains("crash")
+        || content_lower.contains("fail")
+    {
         labels.push("bug".to_string());
     }
 
     // ✨ Feature request detection
-    if content_lower.contains("feature") ||
-       content_lower.contains("enhancement") ||
-       content_lower.contains("request") ||
-       content_lower.contains("would like") {
+    if content_lower.contains("feature")
+        || content_lower.contains("enhancement")
+        || content_lower.contains("request")
+        || content_lower.contains("would like")
+    {
         labels.push("enhancement".to_string());
     }
 
     // 📚 Documentation detection
-    if content_lower.contains("documentation") ||
-       content_lower.contains("docs") ||
-       content_lower.contains("readme") {
+    if content_lower.contains("documentation")
+        || content_lower.contains("docs")
+        || content_lower.contains("readme")
+    {
         labels.push("documentation".to_string());
     }
 
     // ❓ Question detection
-    if content_lower.contains("how to") ||
-       content_lower.contains("help") ||
-       content_lower.contains("question") ||
-       issue.title.ends_with("?") {
+    if content_lower.contains("how to")
+        || content_lower.contains("help")
+        || content_lower.contains("question")
+        || issue.title.ends_with("?")
+    {
         labels.push("question".to_string());
     }
 
     // 🚀 Performance detection
-    if content_lower.contains("performance") ||
-       content_lower.contains("slow") ||
-       content_lower.contains("speed") {
+    if content_lower.contains("performance")
+        || content_lower.contains("slow")
+        || content_lower.contains("speed")
+    {
         labels.push("performance".to_string());
     }
 
@@ -398,23 +414,38 @@ pub async fn create_issue(
                     "Failed to create GitHub client".to_string(),
                     None,
                 )),
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
-    let labels = if request.labels.is_empty() { None } else { Some(request.labels.as_slice()) };
-    let assignees = if request.assignees.is_empty() { None } else { Some(request.assignees.as_slice()) };
+    let labels = if request.labels.is_empty() {
+        None
+    } else {
+        Some(request.labels.as_slice())
+    };
+    let assignees = if request.assignees.is_empty() {
+        None
+    } else {
+        Some(request.assignees.as_slice())
+    };
 
-    match github_client.create_issue(
-        &request.owner,
-        &request.repo,
-        &request.title,
-        &request.body,
-        labels,
-        assignees,
-    ).await {
+    match github_client
+        .create_issue(
+            &request.owner,
+            &request.repo,
+            &request.title,
+            &request.body,
+            labels,
+            assignees,
+        )
+        .await
+    {
         Ok(issue) => {
-            info!("✅ Issue #{} created in {}/{}", issue.number, request.owner, request.repo);
+            info!(
+                "✅ Issue #{} created in {}/{}",
+                issue.number, request.owner, request.repo
+            );
             let response = CreateIssueResponse {
                 issue_number: issue.number,
                 html_url: issue.html_url.to_string(),
@@ -427,7 +458,8 @@ pub async fn create_issue(
                     "Issue created successfully".to_string(),
                     response,
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to create issue: {:#}", e);
@@ -438,7 +470,8 @@ pub async fn create_issue(
                     "Failed to create issue".to_string(),
                     Some(serde_json::json!({ "error": e.to_string() })),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }
@@ -460,15 +493,20 @@ pub async fn add_issue_comment(
                     "Failed to create GitHub client".to_string(),
                     None,
                 )),
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
-    let comment_text = comment.get("body")
+    let comment_text = comment
+        .get("body")
         .and_then(|b| b.as_str())
         .unwrap_or("No comment provided");
 
-    match github_client.add_comment_to_issue(&owner, &repo, issue_number, comment_text).await {
+    match github_client
+        .add_comment_to_issue(&owner, &repo, issue_number, comment_text)
+        .await
+    {
         Ok(_) => {
             info!("✅ Added comment to issue #{}", issue_number);
             (
@@ -476,7 +514,8 @@ pub async fn add_issue_comment(
                 Json(ApiResponse::<()>::success_no_data(
                     "Comment added successfully".to_string(),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to add comment: {:#}", e);
@@ -487,7 +526,8 @@ pub async fn add_issue_comment(
                     "Failed to add comment".to_string(),
                     Some(serde_json::json!({ "error": e.to_string() })),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }
@@ -508,11 +548,15 @@ pub async fn add_issue_labels(
                     "Failed to create GitHub client".to_string(),
                     None,
                 )),
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
-    match github_client.add_labels_to_issue(&owner, &repo, issue_number, &labels).await {
+    match github_client
+        .add_labels_to_issue(&owner, &repo, issue_number, &labels)
+        .await
+    {
         Ok(_) => {
             info!("✅ Added labels to issue #{}: {:?}", issue_number, labels);
             (
@@ -520,7 +564,8 @@ pub async fn add_issue_labels(
                 Json(ApiResponse::<()>::success_no_data(
                     "Labels added successfully".to_string(),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to add labels: {:#}", e);
@@ -531,7 +576,8 @@ pub async fn add_issue_labels(
                     "Failed to add labels".to_string(),
                     Some(serde_json::json!({ "error": e.to_string() })),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }
@@ -552,13 +598,17 @@ pub async fn close_issue_with_comment(
                     "Failed to create GitHub client".to_string(),
                     None,
                 )),
-            ).into_response();
+            )
+                .into_response();
         }
     };
 
     // Add final comment
     if let Some(comment) = payload.get("comment").and_then(|c| c.as_str()) {
-        if let Err(e) = github_client.add_comment_to_issue(&owner, &repo, issue_number, comment).await {
+        if let Err(e) = github_client
+            .add_comment_to_issue(&owner, &repo, issue_number, comment)
+            .await
+        {
             warn!("⚠️ Failed to add closing comment: {:#}", e);
         }
     }
@@ -572,7 +622,8 @@ pub async fn close_issue_with_comment(
                 Json(ApiResponse::<()>::success_no_data(
                     "Issue closed successfully".to_string(),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to close issue: {:#}", e);
@@ -583,7 +634,8 @@ pub async fn close_issue_with_comment(
                     "Failed to close issue".to_string(),
                     Some(serde_json::json!({ "error": e.to_string() })),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
     }
 }

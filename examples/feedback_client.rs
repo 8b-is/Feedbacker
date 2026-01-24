@@ -170,6 +170,31 @@ impl Default for FeedbackClient {
     }
 }
 
+/// Example main function to demonstrate the feedback client
+#[tokio::main]
+async fn main() -> Result<()> {
+    println!("Feedback Client Example");
+    println!("{}", "=".repeat(40));
+
+    // Create a feedback client
+    let client = FeedbackClient::new()?;
+    println!("Feedback client created successfully!");
+
+    // Check for updates
+    println!("\nChecking for Smart Tree updates...");
+    match client.check_for_updates().await {
+        Ok(info) => {
+            println!("Latest version: {}", info.version);
+            println!("Release date: {}", info.release_date);
+            println!("Features: {:?}", info.features);
+        }
+        Err(e) => println!("Failed to check for updates: {}", e),
+    }
+
+    println!("\nExample complete!");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

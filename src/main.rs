@@ -69,6 +69,9 @@ async fn main() -> Result<()> {
 
     info!("✅ Database connection established and migrations complete!");
 
+    // 🌍 Initialize GeoIP database (auto-download if credentials are set)
+    api::mcp::init_geoip_database().await;
+
     // 🎯 Create our amazing application state
     let app_state = api::AppState::new(config.clone(), db_pool);
 
@@ -93,10 +96,14 @@ async fn main() -> Result<()> {
     info!("🎊 Feedbacker is now LIVE and ready for action! 🎊");
 
     // 🛡️ Run the server with graceful shutdown handling
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal())
-        .await
-        .context("Server error occurred")?;
+    // Using IntoMakeServiceWithConnectInfo to get client IP for geo lookups
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal())
+    .await
+    .context("Server error occurred")?;
 
     info!("👋 Feedbacker service shutting down gracefully. Thanks for using our service!");
 
@@ -156,13 +163,25 @@ fn create_router(app_state: api::AppState, config: &Config) -> Result<Router> {
         // 🐙 GitHub webhook endpoint for status updates
         .route("/api/webhook/github", post(api::webhooks::github_webhook))
         // 🎯 GitHub issue automation webhooks
-        .route("/api/webhook/issues", post(api::issue_hooks::github_issue_webhook))
+        .route(
+            "/api/webhook/issues",
+            post(api::issue_hooks::github_issue_webhook),
+        )
         // 🎫 Create new issues (for AI to submit issues!)
         .route("/api/issues", post(api::issue_hooks::create_issue))
         // 🔧 Manual issue management endpoints
-        .route("/api/issues/:owner/:repo/:issue_number/comment", post(api::issue_hooks::add_issue_comment))
-        .route("/api/issues/:owner/:repo/:issue_number/labels", post(api::issue_hooks::add_issue_labels))
-        .route("/api/issues/:owner/:repo/:issue_number/close", post(api::issue_hooks::close_issue_with_comment))
+        .route(
+            "/api/issues/:owner/:repo/:issue_number/comment",
+            post(api::issue_hooks::add_issue_comment),
+        )
+        .route(
+            "/api/issues/:owner/:repo/:issue_number/labels",
+            post(api::issue_hooks::add_issue_labels),
+        )
+        .route(
+            "/api/issues/:owner/:repo/:issue_number/close",
+            post(api::issue_hooks::close_issue_with_comment),
+        )
         // 🤖 Smart Tree integration endpoint
         .route(
             "/api/smart-tree/latest",
@@ -204,13 +223,17 @@ fn create_router(app_state: api::AppState, config: &Config) -> Result<Router> {
         .route("/admin/feedback", get(api::admin::admin_feedback))
         // 🏠 Projects management
         .route("/admin/projects", get(api::admin::admin_projects))
+        .route("/admin/projects/add", post(api::admin::admin_projects_add))
         // 👥 Users management
         .route("/admin/users", get(api::admin::admin_users))
         // 🔄 Background jobs monitoring
         .route("/admin/jobs", get(api::admin::admin_jobs))
         // 🤖 MCP Analytics
         .route("/admin/mcp", get(api::admin::admin_mcp))
-        .route("/admin/mcp/set-version", post(api::admin::admin_mcp_set_version))
+        .route(
+            "/admin/mcp/set-version",
+            post(api::admin::admin_mcp_set_version),
+        )
         // ⚙️ System settings
         .route("/admin/settings", get(api::admin::admin_settings));
 

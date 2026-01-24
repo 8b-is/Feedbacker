@@ -11,7 +11,7 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use serde::{Deserialize, Serialize};
-use sqlx::Row;  // 🔧 Added Row trait import for database row access
+use sqlx::Row; // 🔧 Added Row trait import for database row access
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
@@ -195,7 +195,8 @@ pub async fn submit_feedback(
                     "Feedback submitted successfully! Processing will begin shortly.".to_string(),
                     response,
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to submit feedback: {:#}", e);
@@ -224,7 +225,8 @@ pub async fn get_feedback(
             (
                 StatusCode::OK,
                 Json(ApiResponse::success("Feedback found".to_string(), feedback)),
-            ).into_response()
+            )
+                .into_response()
         }
         Ok(None) => {
             warn!("🔍 Feedback not found: {}", feedback_id);
@@ -268,7 +270,8 @@ pub async fn list_feedback(
                     "Feedback list retrieved successfully".to_string(),
                     response,
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to list feedback: {:#}", e);
@@ -300,7 +303,8 @@ pub async fn get_feedback_stats(
                     "Statistics retrieved successfully".to_string(),
                     stats,
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to get feedback statistics: {:#}", e);
@@ -331,7 +335,8 @@ pub async fn retry_feedback(
                 Json(ApiResponse::<()>::success_no_data(
                     "Feedback processing retry queued successfully".to_string(),
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             error!("❌ Failed to retry feedback {}: {:#}", feedback_id, e);

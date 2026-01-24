@@ -124,7 +124,8 @@ pub async fn login(
                     "Login successful".to_string(),
                     response,
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             warn!("❌ Login failed: {:#}", e);
@@ -167,7 +168,8 @@ pub async fn register(
                     "Registration successful".to_string(),
                     response,
                 )),
-            ).into_response()
+            )
+                .into_response()
         }
         Err(e) => {
             warn!("❌ Registration failed: {:#}", e);

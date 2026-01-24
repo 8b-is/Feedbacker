@@ -148,7 +148,7 @@ impl GitHubClient {
         let repo_info = RepositoryInfo {
             owner: repository
                 .owner
-                .map(|o| o.login)  // 🔧 Fixed: map returns Option<String>, which is what we want
+                .map(|o| o.login) // 🔧 Fixed: map returns Option<String>, which is what we want
                 .unwrap_or_else(|| "unknown".to_string()),
             name: repository.name.clone(),
             full_name: repository.full_name.unwrap_or_default(),

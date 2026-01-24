@@ -24,7 +24,8 @@ pub async fn github_webhook(
     // TODO: Implement GitHub webhook processing
     (
         StatusCode::OK,
-        Json(ApiResponse::<()>::success_no_data(  // 🔧 Added explicit type annotation
+        Json(ApiResponse::<()>::success_no_data(
+            // 🔧 Added explicit type annotation
             "Webhook processed".to_string(),
         )),
     )

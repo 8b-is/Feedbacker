@@ -4,10 +4,9 @@
 use crate::api::AppState;
 use axum::{
     extract::{Path, Query, State},
-    response::{Html, IntoResponse, Response, Redirect},
-    http::{StatusCode, HeaderMap, header},
-    Json,
-    Form,
+    http::{header, HeaderMap, StatusCode},
+    response::{Html, IntoResponse, Redirect, Response},
+    Form, Json,
 };
 use axum_extra::extract::cookie::{Cookie, CookieJar};
 use serde::{Deserialize, Serialize};
@@ -54,10 +53,7 @@ fn generate_session_token(username: &str, password: &str, secret: &str) -> Strin
 }
 
 /// 🔐 Admin Login Page
-pub async fn admin_login(
-    State(app_state): State<AppState>,
-    jar: CookieJar,
-) -> impl IntoResponse {
+pub async fn admin_login(State(app_state): State<AppState>, jar: CookieJar) -> impl IntoResponse {
     // If already authenticated, redirect to dashboard
     if is_admin_authenticated(&jar, &app_state) {
         return Redirect::to("/admin").into_response();
@@ -112,11 +108,12 @@ pub async fn admin_logout(jar: CookieJar) -> impl IntoResponse {
 
 /// 🔐 Render login page HTML
 fn render_login_page(error: Option<&str>) -> String {
-    let error_html = error.map(|e| format!(
-        r#"<div class="error-message">{}</div>"#, e
-    )).unwrap_or_default();
+    let error_html = error
+        .map(|e| format!(r#"<div class="error-message">{}</div>"#, e))
+        .unwrap_or_default();
 
-    format!(r#"
+    format!(
+        r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -222,7 +219,9 @@ fn render_login_page(error: Option<&str>) -> String {
     </div>
 </body>
 </html>
-"#, error_html = error_html)
+"#,
+        error_html = error_html
+    )
 }
 
 /// 🔐 Middleware-like function to check auth and redirect if not logged in
@@ -256,27 +255,29 @@ pub struct FeedbackItem {
 }
 
 /// 🏠 Admin Dashboard
-pub async fn admin_dashboard(
-    State(app_state): State<AppState>,
-    jar: CookieJar,
-) -> Response {
+pub async fn admin_dashboard(State(app_state): State<AppState>, jar: CookieJar) -> Response {
     if let Some(redirect) = require_admin_auth(&jar, &app_state) {
         return redirect;
     }
     info!("🔧 Admin dashboard accessed");
 
-    let stats = get_dashboard_stats(&app_state).await.unwrap_or(DashboardStats {
-        total_users: 0,
-        total_projects: 0,
-        total_feedback: 0,
-        pending_feedback: 0,
-        completed_feedback: 0,
-        failed_feedback: 0,
-    });
+    let stats = get_dashboard_stats(&app_state)
+        .await
+        .unwrap_or(DashboardStats {
+            total_users: 0,
+            total_projects: 0,
+            total_feedback: 0,
+            pending_feedback: 0,
+            completed_feedback: 0,
+            failed_feedback: 0,
+        });
 
-    let recent_feedback = get_recent_feedback(&app_state, 10).await.unwrap_or_default();
+    let recent_feedback = get_recent_feedback(&app_state, 10)
+        .await
+        .unwrap_or_default();
 
-    Html(format!(r#"
+    Html(format!(
+        r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -438,6 +439,7 @@ pub async fn admin_dashboard(
             <a href="/admin/projects">🏠 Projects</a>
             <a href="/admin/users">👥 Users</a>
             <a href="/admin/jobs">⚙️ Background Jobs</a>
+            <a href="/admin/mcp">🤖 MCP Analytics</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
             <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
@@ -497,20 +499,20 @@ pub async fn admin_dashboard(
         stats.completed_feedback,
         stats.failed_feedback,
         render_feedback_table(&recent_feedback),
-    )).into_response()
+    ))
+    .into_response()
 }
 
 /// 📝 Feedback Management Page
-pub async fn admin_feedback(
-    State(app_state): State<AppState>,
-    jar: CookieJar,
-) -> Response {
+pub async fn admin_feedback(State(app_state): State<AppState>, jar: CookieJar) -> Response {
     if let Some(redirect) = require_admin_auth(&jar, &app_state) {
         return redirect;
     }
     info!("🔧 Admin feedback page accessed");
 
-    let feedback = get_recent_feedback(&app_state, 50).await.unwrap_or_default();
+    let feedback = get_recent_feedback(&app_state, 50)
+        .await
+        .unwrap_or_default();
 
     Html(format!(r#"
 <!DOCTYPE html>
@@ -566,6 +568,7 @@ pub async fn admin_feedback(
             <a href="/admin/projects">🏠 Projects</a>
             <a href="/admin/users">👥 Users</a>
             <a href="/admin/jobs">⚙️ Background Jobs</a>
+            <a href="/admin/mcp">🤖 MCP Analytics</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
             <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
@@ -589,17 +592,27 @@ pub async fn admin_feedback(
 "#, render_feedback_table(&feedback))).into_response()
 }
 
+/// 🏠 Project item for listing
+#[derive(Debug, Serialize)]
+pub struct ProjectItem {
+    pub id: String,
+    pub repository: String,
+    pub description: Option<String>,
+    pub is_active: bool,
+    pub created_at: String,
+    pub feedback_count: i64,
+}
+
 /// 🏠 Projects Management Page
-pub async fn admin_projects(
-    State(app_state): State<AppState>,
-    jar: CookieJar,
-) -> Response {
+pub async fn admin_projects(State(app_state): State<AppState>, jar: CookieJar) -> Response {
     if let Some(redirect) = require_admin_auth(&jar, &app_state) {
         return redirect;
     }
     info!("🔧 Admin projects page accessed");
 
-    Html(r#"
+    let projects = get_all_projects(&app_state).await.unwrap_or_default();
+
+    Html(format!(r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -607,17 +620,35 @@ pub async fn admin_projects(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Projects - Feedbacker Admin</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f23; color: #cccccc; min-height: 100vh; }
-        .sidebar { position: fixed; left: 0; top: 0; width: 250px; height: 100vh; background: #1a1a2e; padding: 20px; border-right: 1px solid #333; }
-        .sidebar h1 { color: #00d4ff; font-size: 1.5em; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #333; }
-        .sidebar nav a { display: block; color: #888; text-decoration: none; padding: 12px 15px; margin: 5px 0; border-radius: 8px; transition: all 0.2s; }
-        .sidebar nav a:hover, .sidebar nav a.active { background: #252542; color: #00d4ff; }
-        .main { margin-left: 250px; padding: 30px; }
-        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .header h2 { color: #fff; font-size: 1.8em; }
-        .card { background: #1a1a2e; border-radius: 12px; border: 1px solid #333; padding: 40px; text-align: center; }
-        .card p { color: #666; margin-top: 10px; }
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f0f23; color: #cccccc; min-height: 100vh; }}
+        .sidebar {{ position: fixed; left: 0; top: 0; width: 250px; height: 100vh; background: #1a1a2e; padding: 20px; border-right: 1px solid #333; }}
+        .sidebar h1 {{ color: #00d4ff; font-size: 1.5em; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #333; }}
+        .sidebar nav a {{ display: block; color: #888; text-decoration: none; padding: 12px 15px; margin: 5px 0; border-radius: 8px; transition: all 0.2s; }}
+        .sidebar nav a:hover, .sidebar nav a.active {{ background: #252542; color: #00d4ff; }}
+        .main {{ margin-left: 250px; padding: 30px; }}
+        .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }}
+        .header h2 {{ color: #fff; font-size: 1.8em; }}
+        .card {{ background: #1a1a2e; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px; }}
+        .card-header {{ padding: 20px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; }}
+        .card-header h3 {{ color: #fff; }}
+        .card-body {{ padding: 20px; }}
+        table {{ width: 100%; border-collapse: collapse; }}
+        th, td {{ padding: 12px 15px; text-align: left; border-bottom: 1px solid #333; }}
+        th {{ color: #888; font-weight: 500; font-size: 0.85em; text-transform: uppercase; }}
+        .form-group {{ margin-bottom: 15px; }}
+        .form-group label {{ display: block; margin-bottom: 8px; color: #888; }}
+        .form-group input, .form-group textarea {{ width: 100%; padding: 10px; background: #0f0f23; border: 1px solid #333; border-radius: 8px; color: #fff; font-family: inherit; }}
+        .form-group textarea {{ resize: vertical; min-height: 80px; }}
+        .btn {{ padding: 10px 20px; background: #00d4ff; color: #000; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }}
+        .btn:hover {{ background: #00a8cc; }}
+        .status {{ display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.85em; font-weight: 500; }}
+        .status-active {{ background: #003d00; color: #00ff88; }}
+        .status-inactive {{ background: #3d0000; color: #ff4444; }}
+        .empty-state {{ text-align: center; padding: 40px; color: #666; }}
+        .quick-add {{ display: flex; gap: 10px; margin-top: 15px; flex-wrap: wrap; }}
+        .quick-add button {{ padding: 8px 16px; background: #252542; color: #00d4ff; border: 1px solid #00d4ff; border-radius: 8px; cursor: pointer; font-size: 0.9em; }}
+        .quick-add button:hover {{ background: #00d4ff; color: #000; }}
     </style>
 </head>
 <body>
@@ -629,6 +660,7 @@ pub async fn admin_projects(
             <a href="/admin/projects" class="active">🏠 Projects</a>
             <a href="/admin/users">👥 Users</a>
             <a href="/admin/jobs">⚙️ Background Jobs</a>
+            <a href="/admin/mcp">🤖 MCP Analytics</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
             <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
@@ -638,21 +670,218 @@ pub async fn admin_projects(
         <div class="header">
             <h2>🏠 Projects Management</h2>
         </div>
+
         <div class="card">
-            <h3>📋 No projects yet</h3>
-            <p>Projects will appear here when users connect their repositories.</p>
+            <div class="card-header">
+                <h3>➕ Add New Project</h3>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="/admin/projects/add">
+                    <div class="form-group">
+                        <label for="repository">Repository (owner/repo format)</label>
+                        <input type="text" id="repository" name="repository" placeholder="8b-is/smart-tree" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea id="description" name="description" placeholder="Project description..."></textarea>
+                    </div>
+                    <button type="submit" class="btn">Add Project</button>
+                </form>
+                <div class="quick-add">
+                    <span style="color: #888; line-height: 36px;">Quick add:</span>
+                    <form method="POST" action="/admin/projects/add" style="display: inline;">
+                        <input type="hidden" name="repository" value="8b-is/smart-tree">
+                        <input type="hidden" name="description" value="Smart Tree - AI-optimized filesystem navigation MCP server">
+                        <button type="submit">🌲 Smart Tree</button>
+                    </form>
+                    <form method="POST" action="/admin/projects/add" style="display: inline;">
+                        <input type="hidden" name="repository" value="8b-is/feedbacker">
+                        <input type="hidden" name="description" value="Feedbacker - AI-Powered Repository Management Service">
+                        <button type="submit">🚢 Feedbacker</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3>📋 All Projects</h3>
+            </div>
+            <div class="card-body">
+                {}
+            </div>
         </div>
     </div>
 </body>
 </html>
-"#).into_response()
+"#, render_projects_table(&projects))).into_response()
+}
+
+/// ➕ Add Project Form
+#[derive(Debug, Deserialize)]
+pub struct AddProjectForm {
+    pub repository: String,
+    pub description: Option<String>,
+}
+
+/// ➕ Add Project POST Handler
+pub async fn admin_projects_add(
+    State(app_state): State<AppState>,
+    jar: CookieJar,
+    Form(form): Form<AddProjectForm>,
+) -> Response {
+    if let Some(redirect) = require_admin_auth(&jar, &app_state) {
+        return redirect;
+    }
+    info!("➕ Adding project: {}", form.repository);
+
+    // Ensure system user exists
+    let system_user_id = get_or_create_system_user(&app_state).await;
+
+    if let Some(user_id) = system_user_id {
+        // Create the project
+        let result = sqlx::query(
+            r#"
+            INSERT INTO projects (owner_id, repository, description, is_active, created_at, updated_at)
+            VALUES ($1, $2, $3, true, NOW(), NOW())
+            ON CONFLICT (owner_id, repository) DO UPDATE SET
+                description = COALESCE($3, projects.description),
+                updated_at = NOW()
+            "#
+        )
+        .bind(user_id)
+        .bind(&form.repository)
+        .bind(&form.description)
+        .execute(&app_state.db_pool)
+        .await;
+
+        match result {
+            Ok(_) => info!("✅ Project {} added successfully", form.repository),
+            Err(e) => warn!("❌ Failed to add project: {}", e),
+        }
+    }
+
+    Redirect::to("/admin/projects").into_response()
+}
+
+/// 🤖 Get or create system user for admin-created projects
+async fn get_or_create_system_user(app_state: &AppState) -> Option<uuid::Uuid> {
+    // Try to find existing system user
+    let existing: Option<uuid::Uuid> =
+        sqlx::query_scalar("SELECT id FROM users WHERE email = 'system@feedbacker.local'")
+            .fetch_optional(&app_state.db_pool)
+            .await
+            .ok()
+            .flatten();
+
+    if let Some(id) = existing {
+        return Some(id);
+    }
+
+    // Create system user
+    let result = sqlx::query_scalar::<_, uuid::Uuid>(
+        r#"
+        INSERT INTO users (email, name, password_hash, email_verified, role, is_active)
+        VALUES ('system@feedbacker.local', 'System', 'not-a-real-hash', true, 'service', true)
+        RETURNING id
+        "#,
+    )
+    .fetch_one(&app_state.db_pool)
+    .await;
+
+    match result {
+        Ok(id) => {
+            info!("✅ Created system user with ID: {}", id);
+            Some(id)
+        }
+        Err(e) => {
+            warn!("❌ Failed to create system user: {}", e);
+            None
+        }
+    }
+}
+
+/// 📋 Get all projects from database
+async fn get_all_projects(app_state: &AppState) -> anyhow::Result<Vec<ProjectItem>> {
+    let rows = sqlx::query(
+        r#"
+        SELECT
+            p.id, p.repository, p.description, p.is_active, p.created_at,
+            COALESCE((SELECT COUNT(*) FROM feedback f WHERE f.repository = p.repository), 0) as feedback_count
+        FROM projects p
+        ORDER BY p.created_at DESC
+        "#
+    )
+    .fetch_all(&app_state.db_pool)
+    .await?;
+
+    let items = rows
+        .iter()
+        .map(|row| ProjectItem {
+            id: row.get::<uuid::Uuid, _>("id").to_string(),
+            repository: row.get("repository"),
+            description: row.get("description"),
+            is_active: row.get("is_active"),
+            created_at: row
+                .get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+                .format("%Y-%m-%d %H:%M")
+                .to_string(),
+            feedback_count: row.get("feedback_count"),
+        })
+        .collect();
+
+    Ok(items)
+}
+
+/// 📋 Render projects table
+fn render_projects_table(projects: &[ProjectItem]) -> String {
+    if projects.is_empty() {
+        return r#"<div class="empty-state">📋 No projects yet. Add one above!</div>"#.to_string();
+    }
+
+    let rows: String = projects
+        .iter()
+        .map(|p| {
+            let status_class = if p.is_active { "status-active" } else { "status-inactive" };
+            let status_text = if p.is_active { "Active" } else { "Inactive" };
+            format!(
+                r#"<tr>
+                    <td><a href="https://github.com/{}" target="_blank" style="color: #00d4ff;">{}</a></td>
+                    <td>{}</td>
+                    <td><span class="status {}">{}</span></td>
+                    <td>{}</td>
+                    <td>{}</td>
+                </tr>"#,
+                p.repository,
+                p.repository,
+                p.description.as_deref().unwrap_or("-"),
+                status_class,
+                status_text,
+                p.feedback_count,
+                p.created_at,
+            )
+        })
+        .collect();
+
+    format!(
+        r#"<table>
+            <thead>
+                <tr>
+                    <th>Repository</th>
+                    <th>Description</th>
+                    <th>Status</th>
+                    <th>Feedback</th>
+                    <th>Created</th>
+                </tr>
+            </thead>
+            <tbody>{}</tbody>
+        </table>"#,
+        rows
+    )
 }
 
 /// 👥 Users Management Page
-pub async fn admin_users(
-    State(app_state): State<AppState>,
-    jar: CookieJar,
-) -> Response {
+pub async fn admin_users(State(app_state): State<AppState>, jar: CookieJar) -> Response {
     if let Some(redirect) = require_admin_auth(&jar, &app_state) {
         return redirect;
     }
@@ -688,6 +917,7 @@ pub async fn admin_users(
             <a href="/admin/projects">🏠 Projects</a>
             <a href="/admin/users" class="active">👥 Users</a>
             <a href="/admin/jobs">⚙️ Background Jobs</a>
+            <a href="/admin/mcp">🤖 MCP Analytics</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
             <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
@@ -708,10 +938,7 @@ pub async fn admin_users(
 }
 
 /// ⚙️ Background Jobs Page
-pub async fn admin_jobs(
-    State(app_state): State<AppState>,
-    jar: CookieJar,
-) -> Response {
+pub async fn admin_jobs(State(app_state): State<AppState>, jar: CookieJar) -> Response {
     if let Some(redirect) = require_admin_auth(&jar, &app_state) {
         return redirect;
     }
@@ -747,6 +974,7 @@ pub async fn admin_jobs(
             <a href="/admin/projects">🏠 Projects</a>
             <a href="/admin/users">👥 Users</a>
             <a href="/admin/jobs" class="active">⚙️ Background Jobs</a>
+            <a href="/admin/mcp">🤖 MCP Analytics</a>
             <a href="/admin/settings">🔧 Settings</a>
             <a href="/">← Back to Site</a>
             <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
@@ -767,10 +995,7 @@ pub async fn admin_jobs(
 }
 
 /// 🔧 Settings Page
-pub async fn admin_settings(
-    State(app_state): State<AppState>,
-    jar: CookieJar,
-) -> Response {
+pub async fn admin_settings(State(app_state): State<AppState>, jar: CookieJar) -> Response {
     if let Some(redirect) = require_admin_auth(&jar, &app_state) {
         return redirect;
     }
@@ -815,6 +1040,7 @@ pub async fn admin_settings(
             <a href="/admin/projects">🏠 Projects</a>
             <a href="/admin/users">👥 Users</a>
             <a href="/admin/jobs">⚙️ Background Jobs</a>
+            <a href="/admin/mcp">🤖 MCP Analytics</a>
             <a href="/admin/settings" class="active">🔧 Settings</a>
             <a href="/">← Back to Site</a>
             <a href="/admin/logout" style="margin-top: 30px; color: #ff4444;">🚪 Logout</a>
@@ -892,17 +1118,16 @@ pub async fn admin_settings(
 }
 
 /// 🤖 MCP Analytics Page
-pub async fn admin_mcp(
-    State(app_state): State<AppState>,
-    jar: CookieJar,
-) -> Response {
+pub async fn admin_mcp(State(app_state): State<AppState>, jar: CookieJar) -> Response {
     if let Some(redirect) = require_admin_auth(&jar, &app_state) {
         return redirect;
     }
     info!("🔧 Admin MCP page accessed");
 
     let stats = get_mcp_stats(&app_state).await.unwrap_or_default();
-    let current_version = get_setting(&app_state, "smart_tree_latest_version").await.unwrap_or_else(|| "Not set".to_string());
+    let current_version = get_setting(&app_state, "smart_tree_latest_version")
+        .await
+        .unwrap_or_else(|| "Not set".to_string());
 
     Html(format!(r#"
 <!DOCTYPE html>
@@ -1010,6 +1235,15 @@ pub async fn admin_mcp(
 
         <div class="card">
             <div class="card-header">
+                <h3>🌍 Location Distribution</h3>
+            </div>
+            <div class="card-body">
+                {}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
                 <h3>🕐 Recent Checks</h3>
             </div>
             <div class="card-body">
@@ -1024,6 +1258,7 @@ pub async fn admin_mcp(
         current_version,
         render_platform_table(&stats.platforms),
         render_version_table(&stats.versions),
+        render_locations_table(&stats.locations),
         render_recent_checks_table(&stats.recent_checks),
     )).into_response()
 }
@@ -1060,9 +1295,20 @@ pub async fn admin_mcp_set_version(
 #[derive(Debug, Default)]
 struct McpStats {
     total_checks: i64,
-    platforms: Vec<(String, String, i64)>,  // (platform, arch, count)
-    versions: Vec<(String, i64)>,           // (version, count)
-    recent_checks: Vec<(String, String, String, String)>, // (version, platform, arch, timestamp)
+    platforms: Vec<(String, String, i64)>, // (platform, arch, count)
+    versions: Vec<(String, i64)>,          // (version, count)
+    locations: Vec<(String, String, i64)>, // (city, country, count)
+    recent_checks: Vec<RecentMcpCheck>,
+}
+
+#[derive(Debug)]
+struct RecentMcpCheck {
+    version: String,
+    platform: String,
+    arch: String,
+    city: Option<String>,
+    country: Option<String>,
+    timestamp: String,
 }
 
 async fn get_mcp_stats(app_state: &AppState) -> Option<McpStats> {
@@ -1095,22 +1341,55 @@ async fn get_mcp_stats(app_state: &AppState) -> Option<McpStats> {
         .map(|row| (row.get("client_version"), row.get("count")))
         .collect();
 
-    let recent_rows = sqlx::query(
-        "SELECT client_version, platform, arch, checked_at FROM mcp_analytics ORDER BY checked_at DESC LIMIT 20"
+    // Location distribution
+    let location_rows = sqlx::query(
+        r#"
+        SELECT COALESCE(city, 'Unknown') as city, COALESCE(country, 'Unknown') as country, COUNT(*) as count
+        FROM mcp_analytics
+        WHERE city IS NOT NULL OR country IS NOT NULL
+        GROUP BY city, country
+        ORDER BY count DESC
+        LIMIT 20
+        "#
     )
     .fetch_all(&app_state.db_pool)
     .await
     .unwrap_or_default();
 
-    let recent_checks: Vec<(String, String, String, String)> = recent_rows
+    let locations: Vec<(String, String, i64)> = location_rows
+        .iter()
+        .map(|row| (row.get("city"), row.get("country"), row.get("count")))
+        .collect();
+
+    let recent_rows = sqlx::query(
+        "SELECT client_version, platform, arch, city, country, checked_at FROM mcp_analytics ORDER BY checked_at DESC LIMIT 20"
+    )
+    .fetch_all(&app_state.db_pool)
+    .await
+    .unwrap_or_default();
+
+    let recent_checks: Vec<RecentMcpCheck> = recent_rows
         .iter()
         .map(|row| {
             let ts: chrono::DateTime<chrono::Utc> = row.get("checked_at");
-            (row.get("client_version"), row.get("platform"), row.get("arch"), ts.format("%Y-%m-%d %H:%M:%S").to_string())
+            RecentMcpCheck {
+                version: row.get("client_version"),
+                platform: row.get("platform"),
+                arch: row.get("arch"),
+                city: row.get("city"),
+                country: row.get("country"),
+                timestamp: ts.format("%Y-%m-%d %H:%M:%S").to_string(),
+            }
         })
         .collect();
 
-    Some(McpStats { total_checks, platforms, versions, recent_checks })
+    Some(McpStats {
+        total_checks,
+        platforms,
+        versions,
+        locations,
+        recent_checks,
+    })
 }
 
 async fn get_setting(app_state: &AppState, key: &str) -> Option<String> {
@@ -1138,11 +1417,20 @@ fn render_platform_table(platforms: &[(String, String, i64)]) -> String {
         return r#"<div class="empty-state">No data yet</div>"#.to_string();
     }
 
-    let rows: String = platforms.iter().map(|(platform, arch, count)| {
-        format!(r#"<tr><td>{}</td><td>{}</td><td>{}</td></tr>"#, platform, arch, count)
-    }).collect();
+    let rows: String = platforms
+        .iter()
+        .map(|(platform, arch, count)| {
+            format!(
+                r#"<tr><td>{}</td><td>{}</td><td>{}</td></tr>"#,
+                platform, arch, count
+            )
+        })
+        .collect();
 
-    format!(r#"<table><thead><tr><th>Platform</th><th>Arch</th><th>Count</th></tr></thead><tbody>{}</tbody></table>"#, rows)
+    format!(
+        r#"<table><thead><tr><th>Platform</th><th>Arch</th><th>Count</th></tr></thead><tbody>{}</tbody></table>"#,
+        rows
+    )
 }
 
 fn render_version_table(versions: &[(String, i64)]) -> String {
@@ -1150,23 +1438,63 @@ fn render_version_table(versions: &[(String, i64)]) -> String {
         return r#"<div class="empty-state">No data yet</div>"#.to_string();
     }
 
-    let rows: String = versions.iter().map(|(version, count)| {
-        format!(r#"<tr><td>{}</td><td>{}</td></tr>"#, version, count)
-    }).collect();
+    let rows: String = versions
+        .iter()
+        .map(|(version, count)| format!(r#"<tr><td>{}</td><td>{}</td></tr>"#, version, count))
+        .collect();
 
-    format!(r#"<table><thead><tr><th>Version</th><th>Count</th></tr></thead><tbody>{}</tbody></table>"#, rows)
+    format!(
+        r#"<table><thead><tr><th>Version</th><th>Count</th></tr></thead><tbody>{}</tbody></table>"#,
+        rows
+    )
 }
 
-fn render_recent_checks_table(checks: &[(String, String, String, String)]) -> String {
+fn render_recent_checks_table(checks: &[RecentMcpCheck]) -> String {
     if checks.is_empty() {
         return r#"<div class="empty-state">No checks yet</div>"#.to_string();
     }
 
-    let rows: String = checks.iter().map(|(version, platform, arch, ts)| {
-        format!(r#"<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#, version, platform, arch, ts)
-    }).collect();
+    let rows: String = checks
+        .iter()
+        .map(|c| {
+            let location = match (&c.city, &c.country) {
+                (Some(city), Some(country)) => format!("{}, {}", city, country),
+                (None, Some(country)) => country.clone(),
+                (Some(city), None) => city.clone(),
+                (None, None) => "-".to_string(),
+            };
+            format!(
+                r#"<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"#,
+                c.version, c.platform, c.arch, location, c.timestamp
+            )
+        })
+        .collect();
 
-    format!(r#"<table><thead><tr><th>Version</th><th>Platform</th><th>Arch</th><th>Time</th></tr></thead><tbody>{}</tbody></table>"#, rows)
+    format!(
+        r#"<table><thead><tr><th>Version</th><th>Platform</th><th>Arch</th><th>Location</th><th>Time</th></tr></thead><tbody>{}</tbody></table>"#,
+        rows
+    )
+}
+
+fn render_locations_table(locations: &[(String, String, i64)]) -> String {
+    if locations.is_empty() {
+        return r#"<div class="empty-state">No location data yet. Install GeoLite2-City.mmdb to enable geo tracking.</div>"#.to_string();
+    }
+
+    let rows: String = locations
+        .iter()
+        .map(|(city, country, count)| {
+            format!(
+                r#"<tr><td>{}</td><td>{}</td><td>{}</td></tr>"#,
+                city, country, count
+            )
+        })
+        .collect();
+
+    format!(
+        r#"<table><thead><tr><th>City</th><th>Country</th><th>Count</th></tr></thead><tbody>{}</tbody></table>"#,
+        rows
+    )
 }
 
 // Helper functions
@@ -1187,20 +1515,23 @@ async fn get_dashboard_stats(app_state: &AppState) -> anyhow::Result<DashboardSt
         .await
         .unwrap_or(0);
 
-    let pending_feedback: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM feedback WHERE status = 'pending'")
-        .fetch_one(&app_state.db_pool)
-        .await
-        .unwrap_or(0);
+    let pending_feedback: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM feedback WHERE status = 'pending'")
+            .fetch_one(&app_state.db_pool)
+            .await
+            .unwrap_or(0);
 
-    let completed_feedback: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM feedback WHERE status = 'completed'")
-        .fetch_one(&app_state.db_pool)
-        .await
-        .unwrap_or(0);
+    let completed_feedback: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM feedback WHERE status = 'completed'")
+            .fetch_one(&app_state.db_pool)
+            .await
+            .unwrap_or(0);
 
-    let failed_feedback: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM feedback WHERE status = 'failed'")
-        .fetch_one(&app_state.db_pool)
-        .await
-        .unwrap_or(0);
+    let failed_feedback: i64 =
+        sqlx::query_scalar("SELECT COUNT(*) FROM feedback WHERE status = 'failed'")
+            .fetch_one(&app_state.db_pool)
+            .await
+            .unwrap_or(0);
 
     Ok(DashboardStats {
         total_users,
@@ -1212,7 +1543,10 @@ async fn get_dashboard_stats(app_state: &AppState) -> anyhow::Result<DashboardSt
     })
 }
 
-async fn get_recent_feedback(app_state: &AppState, limit: i64) -> anyhow::Result<Vec<FeedbackItem>> {
+async fn get_recent_feedback(
+    app_state: &AppState,
+    limit: i64,
+) -> anyhow::Result<Vec<FeedbackItem>> {
     let rows = sqlx::query(
         "SELECT id, repository, status::text, created_at, content FROM feedback ORDER BY created_at DESC LIMIT $1"
     )
@@ -1228,8 +1562,12 @@ async fn get_recent_feedback(app_state: &AppState, limit: i64) -> anyhow::Result
                 id: row.get::<uuid::Uuid, _>("id").to_string(),
                 repository: row.get("repository"),
                 status: row.get("status"),
-                created_at: row.get::<chrono::DateTime<chrono::Utc>, _>("created_at").format("%Y-%m-%d %H:%M").to_string(),
-                content_preview: content.chars().take(50).collect::<String>() + if content.len() > 50 { "..." } else { "" },
+                created_at: row
+                    .get::<chrono::DateTime<chrono::Utc>, _>("created_at")
+                    .format("%Y-%m-%d %H:%M")
+                    .to_string(),
+                content_preview: content.chars().take(50).collect::<String>()
+                    + if content.len() > 50 { "..." } else { "" },
             }
         })
         .collect();

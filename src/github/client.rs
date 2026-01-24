@@ -103,16 +103,16 @@ impl GitHubClient {
                 )
             })?;
 
-        info!("✅ Issue #{} assigned successfully to {}", issue_number, assignee);
+        info!(
+            "✅ Issue #{} assigned successfully to {}",
+            issue_number, assignee
+        );
         Ok(())
     }
 
     /// ✅ Close an issue
     pub async fn close_issue(&self, owner: &str, repo: &str, issue_number: u32) -> Result<()> {
-        info!(
-            "✅ Closing issue #{} in {}/{}",
-            issue_number, owner, repo
-        );
+        info!("✅ Closing issue #{} in {}/{}", issue_number, owner, repo);
 
         self.octocrab
             .issues(owner, repo)
@@ -232,7 +232,13 @@ impl GitHubClient {
     }
 
     /// 🌿 Create a new branch
-    pub async fn create_branch(&self, owner: &str, repo: &str, branch_name: &str, from_sha: &str) -> Result<()> {
+    pub async fn create_branch(
+        &self,
+        owner: &str,
+        repo: &str,
+        branch_name: &str,
+        from_sha: &str,
+    ) -> Result<()> {
         info!(
             "🌿 Creating branch {} from {} in {}/{}",
             branch_name, from_sha, owner, repo
@@ -300,12 +306,7 @@ impl GitHubClient {
                 Some(&body),
             )
             .await
-            .with_context(|| {
-                format!(
-                    "Failed to update file {} in {}/{}",
-                    path, owner, repo
-                )
-            })?;
+            .with_context(|| format!("Failed to update file {} in {}/{}", path, owner, repo))?;
 
         info!("✅ File {} updated successfully", path);
         Ok(())
@@ -333,7 +334,10 @@ impl GitHubClient {
                 Ok(true)
             }
             Err(_) => {
-                info!("❌ {} is not a collaborator on {}/{}", username, owner, repo);
+                info!(
+                    "❌ {} is not a collaborator on {}/{}",
+                    username, owner, repo
+                );
                 Ok(false)
             }
         }
@@ -349,10 +353,7 @@ impl GitHubClient {
         labels: Option<&[String]>,
         assignees: Option<&[String]>,
     ) -> Result<Issue> {
-        info!(
-            "🎫 Creating issue '{}' in {}/{}",
-            title, owner, repo
-        );
+        info!("🎫 Creating issue '{}' in {}/{}", title, owner, repo);
 
         let issues_handler = self.octocrab.issues(owner, repo);
         let mut issue_builder = issues_handler.create(title).body(body);
@@ -368,14 +369,12 @@ impl GitHubClient {
         let issue = issue_builder
             .send()
             .await
-            .with_context(|| {
-                format!(
-                    "Failed to create issue '{}' in {}/{}",
-                    title, owner, repo
-                )
-            })?;
+            .with_context(|| format!("Failed to create issue '{}' in {}/{}", title, owner, repo))?;
 
-        info!("✅ Issue #{} created successfully: {}", issue.number, issue.html_url);
+        info!(
+            "✅ Issue #{} created successfully: {}",
+            issue.number, issue.html_url
+        );
         Ok(issue)
     }
 }

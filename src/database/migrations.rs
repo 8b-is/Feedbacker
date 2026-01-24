@@ -48,7 +48,10 @@ pub async fn run_all_migrations(pool: &PgPool) -> Result<()> {
 
     for migration in migrations {
         if !applied_migrations.contains(&migration.id) {
-            info!("📝 Applying migration: {} - {}", migration.id, migration.description);
+            info!(
+                "📝 Applying migration: {} - {}",
+                migration.id, migration.description
+            );
             apply_migration(pool, &migration)
                 .await
                 .with_context(|| format!("Failed to apply migration {}", migration.id))?;
@@ -108,7 +111,10 @@ async fn get_applied_migrations(pool: &PgPool) -> Result<Vec<String>> {
         .await
         .context("Failed to fetch applied migrations")?;
 
-    Ok(rows.into_iter().map(|row| row.get::<String, _>("id")).collect())
+    Ok(rows
+        .into_iter()
+        .map(|row| row.get::<String, _>("id"))
+        .collect())
 }
 
 /// 🔢 Calculate checksum
@@ -332,6 +338,31 @@ CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings FOR EACH ROW
             "#.to_string(),
             down_sql: Some("DROP TABLE IF EXISTS mcp_analytics; DROP TABLE IF EXISTS settings;".to_string()),
         },
+        Migration {
+            id: "v3_mcp_geo".to_string(),
+            description: "Add IP and geolocation fields to MCP analytics".to_string(),
+            up_sql: r#"
+-- Add IP and geo columns to mcp_analytics
+ALTER TABLE mcp_analytics ADD COLUMN IF NOT EXISTS ip_address INET;
+ALTER TABLE mcp_analytics ADD COLUMN IF NOT EXISTS country VARCHAR(2);
+ALTER TABLE mcp_analytics ADD COLUMN IF NOT EXISTS region VARCHAR(100);
+ALTER TABLE mcp_analytics ADD COLUMN IF NOT EXISTS city VARCHAR(100);
+ALTER TABLE mcp_analytics ADD COLUMN IF NOT EXISTS latitude DOUBLE PRECISION;
+ALTER TABLE mcp_analytics ADD COLUMN IF NOT EXISTS longitude DOUBLE PRECISION;
+
+-- Index for country statistics
+CREATE INDEX IF NOT EXISTS idx_mcp_analytics_country ON mcp_analytics(country);
+CREATE INDEX IF NOT EXISTS idx_mcp_analytics_city ON mcp_analytics(city);
+            "#.to_string(),
+            down_sql: Some(r#"
+ALTER TABLE mcp_analytics DROP COLUMN IF EXISTS ip_address;
+ALTER TABLE mcp_analytics DROP COLUMN IF EXISTS country;
+ALTER TABLE mcp_analytics DROP COLUMN IF EXISTS region;
+ALTER TABLE mcp_analytics DROP COLUMN IF EXISTS city;
+ALTER TABLE mcp_analytics DROP COLUMN IF EXISTS latitude;
+ALTER TABLE mcp_analytics DROP COLUMN IF EXISTS longitude;
+            "#.to_string()),
+        },
     ]
 }
 
@@ -340,7 +371,10 @@ pub async fn rollback_migration(pool: &PgPool, migration_id: &str) -> Result<()>
     warn!("⚠️ Rolling back migration: {}", migration_id);
 
     let migrations = get_all_migrations();
-    let migration = migrations.iter().find(|m| m.id == migration_id).context("Migration not found")?;
+    let migration = migrations
+        .iter()
+        .find(|m| m.id == migration_id)
+        .context("Migration not found")?;
 
     if let Some(down_sql) = &migration.down_sql {
         let mut tx = pool.begin().await?;
@@ -404,9 +438,13 @@ CREATE INDEX idx_users_email ON users(email);
         }
 
         // First statement should be CREATE TYPE, not CREATE INDEX
-        assert!(!statements[0].trim().starts_with("CREATE INDEX"),
-            "First statement should not be CREATE INDEX!");
-        assert!(statements.iter().any(|s| s.contains("CREATE TABLE users")),
-            "Should have CREATE TABLE users statement");
+        assert!(
+            !statements[0].trim().starts_with("CREATE INDEX"),
+            "First statement should not be CREATE INDEX!"
+        );
+        assert!(
+            statements.iter().any(|s| s.contains("CREATE TABLE users")),
+            "Should have CREATE TABLE users statement"
+        );
     }
 }
