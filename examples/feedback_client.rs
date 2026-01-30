@@ -1,13 +1,13 @@
 // -----------------------------------------------------------------------------
 // 🌮 Feedback API Client - Helping Smart Tree Survive the Franchise Wars!
 // -----------------------------------------------------------------------------
-// This module handles communication with f.8b.is for feedback submission and
+// This module handles communication with f.8t.is for feedback submission and
 // update checking. All feedback helps make Smart Tree better!
 //
 // Endpoints:
-// - POST https://f.8b.is/api/feedback - Submit feedback and feature requests
-// - GET  https://f.8b.is/mcp/check - Get latest version info with platform/arch (preferred)
-// - GET  https://f.8b.is/api/smart-tree/latest - Get latest version info (legacy fallback)
+// - POST https://f.8t.is/api/feedback - Submit feedback and feature requests
+// - GET  https://f.8t.is/mcp/check - Get latest version info with platform/arch (preferred)
+// - GET  https://f.8t.is/api/smart-tree/latest - Get latest version info (legacy fallback)
 // -----------------------------------------------------------------------------
 
 use anyhow::Result;
@@ -155,6 +155,14 @@ impl FeedbackClient {
     }
 
     /// Check for latest version using the new MCP endpoint with fallback to legacy
+    ///
+    /// This function attempts to use the new `/mcp/check` endpoint which provides
+    /// platform and architecture analytics. If that fails for any reason, it falls
+    /// back to the legacy `/api/smart-tree/latest` endpoint.
+    ///
+    /// Note: When using the MCP endpoint, some fields in the returned `VersionInfo`
+    /// may contain placeholder values ("N/A" or empty vectors) as the MCP endpoint
+    /// provides a different data structure.
     pub async fn check_for_updates(&self) -> Result<VersionInfo> {
         let current_version = env!("CARGO_PKG_VERSION");
 
@@ -167,10 +175,11 @@ impl FeedbackClient {
         );
 
         // Attempt to use the new MCP endpoint
-        if let Ok(response) = self.client.get(&mcp_url).send().await {
-            if response.status() == StatusCode::OK {
+        match self.client.get(&mcp_url).send().await {
+            Ok(response) if response.status() == StatusCode::OK => {
                 if let Ok(mcp_data) = response.json::<McpCheckResponse>().await {
                     // Convert MCP response to VersionInfo format
+                    // Note: Some fields use placeholders as MCP endpoint has different schema
                     return Ok(VersionInfo {
                         version: mcp_data.latest_version,
                         release_date: "N/A".to_string(), // MCP endpoint doesn't provide this
@@ -180,6 +189,21 @@ impl FeedbackClient {
                         ai_benefits: vec![], // MCP endpoint doesn't provide this
                     });
                 }
+            }
+            Err(e) => {
+                // Log MCP endpoint failure for debugging (only in debug mode to avoid production noise)
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "Debug: MCP endpoint failed ({}), falling back to legacy endpoint",
+                    e
+                );
+            }
+            _ => {
+                // Non-200 status from MCP endpoint, fall through to legacy
+                #[cfg(debug_assertions)]
+                eprintln!(
+                    "Debug: MCP endpoint returned non-OK status, falling back to legacy endpoint"
+                );
             }
         }
 
