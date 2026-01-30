@@ -66,10 +66,15 @@ Smart Tree is like having a super-powered assistant that understands your codeba
      "feedbacker": {
        "endpoint": "https://f.8b.is/api/feedback",
        "tool_requests": "https://f.8b.is/api/tool-request",
-       "updates": "https://f.8b.is/api/smart-tree/latest"
+       "version_check": "https://f.8b.is/mcp/check",
+       "legacy_updates": "https://f.8b.is/api/smart-tree/latest"
      }
    }
    ```
+
+   **Note**: The version check now supports both:
+   - **New MCP endpoint** (`/mcp/check`) - Includes platform and architecture detection for better analytics
+   - **Legacy endpoint** (`/api/smart-tree/latest`) - Automatic fallback if the new endpoint is unavailable
 
 3. **Start Smart Tree with Feedbacker integration**:
    ```bash
