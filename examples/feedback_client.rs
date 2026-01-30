@@ -157,7 +157,7 @@ impl FeedbackClient {
     /// Check for latest version using the new MCP endpoint with fallback to legacy
     pub async fn check_for_updates(&self) -> Result<VersionInfo> {
         let current_version = env!("CARGO_PKG_VERSION");
-        
+
         // Try the new MCP endpoint first (with platform and architecture detection)
         let platform = std::env::consts::OS;
         let arch = std::env::consts::ARCH;
@@ -242,5 +242,43 @@ mod tests {
     fn test_feedback_client_creation() {
         let client = FeedbackClient::new();
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_mcp_check_response_deserialization() {
+        let json = r#"{
+            "latest_version": "1.0.0",
+            "update_available": false,
+            "download_url": "https://example.com/download",
+            "release_notes": "Some notes",
+            "new_features": ["feature1", "feature2"],
+            "message": "Up to date"
+        }"#;
+
+        let response: Result<McpCheckResponse, _> = serde_json::from_str(json);
+        assert!(response.is_ok());
+
+        let response = response.unwrap();
+        assert_eq!(response.latest_version, "1.0.0");
+        assert!(!response.update_available);
+    }
+
+    #[test]
+    fn test_version_info_deserialization() {
+        let json = r#"{
+            "version": "1.0.0",
+            "release_date": "2024-01-01",
+            "download_url": "https://example.com/download",
+            "release_notes_url": "https://example.com/notes",
+            "features": ["feature1"],
+            "ai_benefits": ["benefit1"]
+        }"#;
+
+        let info: Result<VersionInfo, _> = serde_json::from_str(json);
+        assert!(info.is_ok());
+
+        let info = info.unwrap();
+        assert_eq!(info.version, "1.0.0");
+        assert_eq!(info.release_date, "2024-01-01");
     }
 }
