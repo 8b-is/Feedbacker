@@ -1,12 +1,13 @@
 // -----------------------------------------------------------------------------
 // 🌮 Feedback API Client - Helping Smart Tree Survive the Franchise Wars!
 // -----------------------------------------------------------------------------
-// This module handles communication with f.8t.is for feedback submission and
+// This module handles communication with f.8b.is for feedback submission and
 // update checking. All feedback helps make Smart Tree better!
 //
 // Endpoints:
-// - POST https://f.8t.is/api/feedback - Submit feedback and feature requests
-// - GET  https://f.8t.is/api/smart-tree/latest - Get latest version info (cached)
+// - POST https://f.8b.is/api/feedback - Submit feedback and feature requests
+// - GET  https://f.8b.is/mcp/check - Get latest version info with platform/arch (preferred)
+// - GET  https://f.8b.is/api/smart-tree/latest - Get latest version info (legacy fallback)
 // -----------------------------------------------------------------------------
 
 use anyhow::Result;
@@ -68,7 +69,7 @@ pub struct FeedbackResponse {
     pub status: String,
 }
 
-/// Latest version info
+/// Latest version info from legacy endpoint
 #[derive(Debug, Deserialize)]
 pub struct VersionInfo {
     pub version: String,
@@ -77,6 +78,17 @@ pub struct VersionInfo {
     pub release_notes_url: String,
     pub features: Vec<String>,
     pub ai_benefits: Vec<String>,
+}
+
+/// Response from MCP check endpoint
+#[derive(Debug, Deserialize)]
+pub struct McpCheckResponse {
+    pub latest_version: String,
+    pub update_available: bool,
+    pub download_url: Option<String>,
+    pub release_notes: Option<String>,
+    pub new_features: Option<Vec<String>>,
+    pub message: Option<String>,
 }
 
 /// API client for f.8t.is
@@ -142,11 +154,38 @@ impl FeedbackClient {
         }
     }
 
-    /// Check for latest version (cached on server for 1 hour)
+    /// Check for latest version using the new MCP endpoint with fallback to legacy
     pub async fn check_for_updates(&self) -> Result<VersionInfo> {
-        let url = format!("{}/api/smart-tree/latest", FEEDBACK_API_BASE);
+        let current_version = env!("CARGO_PKG_VERSION");
+        
+        // Try the new MCP endpoint first (with platform and architecture detection)
+        let platform = std::env::consts::OS;
+        let arch = std::env::consts::ARCH;
+        let mcp_url = format!(
+            "{}/mcp/check?version={}&platform={}&arch={}",
+            FEEDBACK_API_BASE, current_version, platform, arch
+        );
 
-        let response = self.client.get(&url).send().await?;
+        // Attempt to use the new MCP endpoint
+        if let Ok(response) = self.client.get(&mcp_url).send().await {
+            if response.status() == StatusCode::OK {
+                if let Ok(mcp_data) = response.json::<McpCheckResponse>().await {
+                    // Convert MCP response to VersionInfo format
+                    return Ok(VersionInfo {
+                        version: mcp_data.latest_version,
+                        release_date: "N/A".to_string(), // MCP endpoint doesn't provide this
+                        download_url: mcp_data.download_url.unwrap_or_default(),
+                        release_notes_url: mcp_data.release_notes.unwrap_or_default(),
+                        features: mcp_data.new_features.unwrap_or_default(),
+                        ai_benefits: vec![], // MCP endpoint doesn't provide this
+                    });
+                }
+            }
+        }
+
+        // Fall back to the legacy /api/smart-tree/latest endpoint
+        let legacy_url = format!("{}/api/smart-tree/latest", FEEDBACK_API_BASE);
+        let response = self.client.get(&legacy_url).send().await?;
 
         match response.status() {
             StatusCode::OK => {
